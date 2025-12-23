@@ -310,13 +310,24 @@ class Dashboard {
         }
     }
 
-    showEpisodeModal(episode, releaseGroups = {}) {
+    async showEpisodeModal(episode, releaseGroups = {}) {
         const metadata = episode.metadata || {};
         const workflow = metadata.workflow || {};
         const release = metadata.release || {};
         const recording = metadata.recording || {};
         const series = metadata.series || {};
+        const distribution = metadata.distribution || {};
 
+        // Fetch detailed episode data with file list
+        let episodeDetails;
+        try {
+            episodeDetails = await this.fetchAPI(`/episodes/${episode.series}/${episode.episode}`);
+        } catch (error) {
+            console.error('Failed to load episode details:', error);
+            episodeDetails = { files: [] };
+        }
+
+        const files = episodeDetails.files || [];
         const releaseGroupId = release.release_group;
         const releaseGroup = releaseGroupId && releaseGroups[releaseGroupId];
 
@@ -339,6 +350,37 @@ class Dashboard {
             `;
         }).join('');
 
+        // Determine initial preview file (thumbnail or first media file)
+        let previewFile = null;
+        if (metadata.thumbnail) {
+            previewFile = files.find(f => f.name === metadata.thumbnail);
+        }
+        if (!previewFile) {
+            previewFile = files.find(f => this.isMediaFile(f.ext));
+        }
+
+        // Generate file browser HTML
+        const fileBrowserHTML = this.renderFileBrowser(files, episode.path, previewFile);
+
+        // Generate media preview HTML
+        const mediaPreviewHTML = this.renderMediaPreview(previewFile, episode.path);
+
+        // Release dependencies
+        const dependencies = release.depends_on || [];
+        const dependenciesHTML = dependencies.length > 0
+            ? `<ul class="dependency-list">
+                ${dependencies.map(dep => `<li class="dependency-item">${this.escapeHtml(dep)}</li>`).join('')}
+               </ul>`
+            : '<p class="text-muted">No dependencies</p>';
+
+        // Distribution platforms
+        const platforms = distribution.profiles ? Object.keys(distribution.profiles) : [];
+        const platformsHTML = platforms.length > 0
+            ? `<div class="distribution-badges">
+                ${platforms.map(p => `<span class="platform-badge">${this.escapeHtml(p)}</span>`).join('')}
+               </div>`
+            : '<p class="text-muted">No platforms configured</p>';
+
         const modalHTML = `
             <div class="modal-overlay" id="episode-modal">
                 <div class="modal">
@@ -350,73 +392,96 @@ class Dashboard {
                         <button class="modal-close" onclick="document.getElementById('episode-modal').remove()">×</button>
                     </div>
                     <div class="modal-body">
-                        <div class="modal-section">
-                            <h3>Description</h3>
-                            <p>${this.escapeHtml(metadata.description || 'No description available')}</p>
-                        </div>
+                        <div class="modal-body-grid">
+                            <div class="modal-main-content">
+                                <!-- Media Preview -->
+                                <div class="modal-section">
+                                    <h3>Media Preview</h3>
+                                    ${mediaPreviewHTML}
+                                </div>
 
-                        <div class="modal-section">
-                            <h3>Status & Release</h3>
-                            <div class="metadata-grid">
-                                <div class="metadata-item">
-                                    <div class="metadata-label">Content Status</div>
-                                    <div class="metadata-value">
-                                        <span class="badge ${this.getStatusClass(metadata.content_status)}">${metadata.content_status || 'draft'}</span>
+                                <!-- Description -->
+                                <div class="modal-section">
+                                    <h3>Description</h3>
+                                    <p>${this.escapeHtml(metadata.description || 'No description available')}</p>
+                                </div>
+
+                                <!-- Metadata -->
+                                <div class="modal-section">
+                                    <h3>Metadata</h3>
+                                    <div class="metadata-grid">
+                                        <div class="metadata-item">
+                                            <div class="metadata-label">Content Status</div>
+                                            <div class="metadata-value">
+                                                <span class="badge ${this.getStatusClass(metadata.content_status)}">${metadata.content_status || 'draft'}</span>
+                                            </div>
+                                        </div>
+                                        <div class="metadata-item">
+                                            <div class="metadata-label">Series</div>
+                                            <div class="metadata-value">${this.escapeHtml(series.name || episode.series)}</div>
+                                        </div>
+                                        ${recording.date ? `
+                                            <div class="metadata-item">
+                                                <div class="metadata-label">Recording Date</div>
+                                                <div class="metadata-value">${this.escapeHtml(recording.date)}</div>
+                                            </div>
+                                        ` : ''}
+                                        ${recording.duration_final ? `
+                                            <div class="metadata-item">
+                                                <div class="metadata-label">Duration</div>
+                                                <div class="metadata-value">${this.escapeHtml(recording.duration_final)}</div>
+                                            </div>
+                                        ` : ''}
                                     </div>
                                 </div>
-                                <div class="metadata-item">
-                                    <div class="metadata-label">Target Date</div>
-                                    <div class="metadata-value">${this.escapeHtml(release.target_date || 'Not set')}</div>
+
+                                <!-- Workflow Progress -->
+                                <div class="modal-section">
+                                    <h3>Workflow Progress</h3>
+                                    <div class="workflow-checklist">
+                                        ${workflowHTML}
+                                    </div>
                                 </div>
-                                ${releaseGroup ? `
-                                    <div class="metadata-item">
-                                        <div class="metadata-label">Release Group</div>
-                                        <div class="metadata-value">${this.escapeHtml(releaseGroup.name || releaseGroupId)}</div>
+                            </div>
+
+                            <div class="modal-sidebar">
+                                <!-- File Browser -->
+                                <div class="modal-section">
+                                    <h3>Files</h3>
+                                    ${fileBrowserHTML}
+                                </div>
+
+                                <!-- Release Info -->
+                                <div class="modal-section">
+                                    <h3>Release Info</h3>
+                                    <div class="release-info-grid">
+                                        ${releaseGroup ? `
+                                            <div class="release-info-item">
+                                                <div class="release-info-label">Release Group</div>
+                                                <div class="release-info-value">${this.escapeHtml(releaseGroup.name || releaseGroupId)}</div>
+                                            </div>
+                                        ` : ''}
+                                        <div class="release-info-item">
+                                            <div class="release-info-label">Target Date</div>
+                                            <div class="release-info-value">${this.escapeHtml(release.target_date || 'Not set')}</div>
+                                        </div>
+                                        ${dependencies.length > 0 ? `
+                                            <div class="release-info-item">
+                                                <div class="release-info-label">Dependencies</div>
+                                                ${dependenciesHTML}
+                                            </div>
+                                        ` : ''}
+                                    </div>
+                                </div>
+
+                                <!-- Distribution -->
+                                ${platforms.length > 0 ? `
+                                    <div class="modal-section">
+                                        <h3>Distribution</h3>
+                                        ${platformsHTML}
                                     </div>
                                 ` : ''}
-                                <div class="metadata-item">
-                                    <div class="metadata-label">Series</div>
-                                    <div class="metadata-value">${this.escapeHtml(series.name || episode.series)}</div>
-                                </div>
                             </div>
-                        </div>
-
-                        <div class="modal-section">
-                            <h3>Workflow Progress</h3>
-                            <div class="workflow-checklist">
-                                ${workflowHTML}
-                            </div>
-                        </div>
-
-                        ${recording.date || recording.duration_final ? `
-                            <div class="modal-section">
-                                <h3>Recording Details</h3>
-                                <div class="metadata-grid">
-                                    ${recording.date ? `
-                                        <div class="metadata-item">
-                                            <div class="metadata-label">Recording Date</div>
-                                            <div class="metadata-value">${this.escapeHtml(recording.date)}</div>
-                                        </div>
-                                    ` : ''}
-                                    ${recording.duration_final ? `
-                                        <div class="metadata-item">
-                                            <div class="metadata-label">Duration</div>
-                                            <div class="metadata-value">${this.escapeHtml(recording.duration_final)}</div>
-                                        </div>
-                                    ` : ''}
-                                    ${recording.format ? `
-                                        <div class="metadata-item">
-                                            <div class="metadata-label">Format</div>
-                                            <div class="metadata-value">${this.escapeHtml(recording.format)}</div>
-                                        </div>
-                                    ` : ''}
-                                </div>
-                            </div>
-                        ` : ''}
-
-                        <div class="modal-section">
-                            <h3>Path</h3>
-                            <p class="text-muted"><small>${this.escapeHtml(episode.path)}</small></p>
                         </div>
                     </div>
                 </div>
@@ -426,11 +491,148 @@ class Dashboard {
         // Add modal to page
         document.body.insertAdjacentHTML('beforeend', modalHTML);
 
+        // Attach file click handlers
+        this.attachFileClickHandlers(files, episode.path);
+
         // Close on overlay click
         document.getElementById('episode-modal').addEventListener('click', (e) => {
             if (e.target.id === 'episode-modal') {
                 e.target.remove();
             }
+        });
+    }
+
+    isMediaFile(ext) {
+        const mediaExtensions = ['.mp4', '.mov', '.webm', '.mp3', '.wav', '.m4a', '.png', '.jpg', '.jpeg', '.gif', '.webp'];
+        return mediaExtensions.includes(ext);
+    }
+
+    getFileIcon(file) {
+        const ext = file.ext;
+        if (file.type === 'directory') return '📁';
+        if (['.mp4', '.mov', '.webm'].includes(ext)) return '🎥';
+        if (['.mp3', '.wav', '.m4a'].includes(ext)) return '🎵';
+        if (['.png', '.jpg', '.jpeg', '.gif', '.webp'].includes(ext)) return '🖼️';
+        if (['.yml', '.yaml'].includes(ext)) return '⚙️';
+        if (['.md', '.txt'].includes(ext)) return '📄';
+        return '📄';
+    }
+
+    formatFileSize(bytes) {
+        if (bytes === 0) return '0 Bytes';
+        const k = 1024;
+        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+    }
+
+    formatFileDate(dateString) {
+        try {
+            const date = new Date(dateString);
+            return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+        } catch {
+            return dateString;
+        }
+    }
+
+    renderFileBrowser(files, episodePath, activeFile) {
+        if (!files || files.length === 0) {
+            return '<div class="text-muted text-center" style="padding: 2rem;">No files found</div>';
+        }
+
+        const filesHTML = files
+            .filter(f => f.type === 'file')
+            .map(file => {
+                const isActive = activeFile && file.name === activeFile.name;
+                return `
+                    <div class="file-item ${isActive ? 'active' : ''}" data-file="${this.escapeHtml(file.name)}">
+                        <div class="file-icon">${this.getFileIcon(file)}</div>
+                        <div class="file-info">
+                            <div class="file-name">${this.escapeHtml(file.name)}</div>
+                            <div class="file-meta">
+                                <span class="file-size">${this.formatFileSize(file.size)}</span>
+                                <span class="file-date">${this.formatFileDate(file.modified)}</span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+        return `
+            <div class="file-browser">
+                <div class="file-browser-header">${files.filter(f => f.type === 'file').length} Files</div>
+                <div class="file-list">
+                    ${filesHTML}
+                </div>
+            </div>
+        `;
+    }
+
+    renderMediaPreview(file, episodePath) {
+        if (!file || !this.isMediaFile(file.ext)) {
+            return `
+                <div class="media-preview-container">
+                    <div class="media-preview">
+                        <div class="media-preview-placeholder">
+                            <div class="icon">🎬</div>
+                            <p>No media file selected</p>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        const filePath = `/content/${episodePath}/${file.name}`;
+        const ext = file.ext;
+        let mediaHTML = '';
+
+        if (['.mp4', '.mov', '.webm'].includes(ext)) {
+            mediaHTML = `<video controls src="${filePath}">Your browser does not support video playback.</video>`;
+        } else if (['.mp3', '.wav', '.m4a'].includes(ext)) {
+            mediaHTML = `<audio controls src="${filePath}">Your browser does not support audio playback.</audio>`;
+        } else if (['.png', '.jpg', '.jpeg', '.gif', '.webp'].includes(ext)) {
+            mediaHTML = `<img src="${filePath}" alt="${this.escapeHtml(file.name)}">`;
+        }
+
+        return `
+            <div class="media-preview-container">
+                <div class="media-preview" id="media-preview">
+                    ${mediaHTML}
+                </div>
+            </div>
+        `;
+    }
+
+    attachFileClickHandlers(files, episodePath) {
+        document.querySelectorAll('.file-item').forEach(item => {
+            item.addEventListener('click', () => {
+                const fileName = item.dataset.file;
+                const file = files.find(f => f.name === fileName);
+
+                if (file && this.isMediaFile(file.ext)) {
+                    // Update active state
+                    document.querySelectorAll('.file-item').forEach(i => i.classList.remove('active'));
+                    item.classList.add('active');
+
+                    // Update media preview
+                    const previewContainer = document.getElementById('media-preview');
+                    if (previewContainer) {
+                        const filePath = `/content/${episodePath}/${file.name}`;
+                        const ext = file.ext;
+                        let mediaHTML = '';
+
+                        if (['.mp4', '.mov', '.webm'].includes(ext)) {
+                            mediaHTML = `<video controls src="${filePath}">Your browser does not support video playback.</video>`;
+                        } else if (['.mp3', '.wav', '.m4a'].includes(ext)) {
+                            mediaHTML = `<audio controls src="${filePath}">Your browser does not support audio playback.</audio>`;
+                        } else if (['.png', '.jpg', '.jpeg', '.gif', '.webp'].includes(ext)) {
+                            mediaHTML = `<img src="${filePath}" alt="${this.escapeHtml(file.name)}">`;
+                        }
+
+                        previewContainer.innerHTML = mediaHTML;
+                    }
+                }
+            });
         });
     }
 

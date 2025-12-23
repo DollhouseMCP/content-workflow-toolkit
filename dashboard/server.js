@@ -9,9 +9,9 @@ const PORT = process.env.PORT || 3000;
 // Serve static files from public directory
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Serve media files from series and assets directories
-app.use('/media/series', express.static(path.join(__dirname, '../series')));
-app.use('/media/assets', express.static(path.join(__dirname, '../assets')));
+// Serve content files from series and assets directories
+app.use('/content/series', express.static(path.join(__dirname, '../series')));
+app.use('/content/assets', express.static(path.join(__dirname, '../assets')));
 
 // API routes
 app.use('/api', apiRoutes);

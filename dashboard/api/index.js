@@ -128,8 +128,21 @@ router.get('/episodes/:series/:episode', async (req, res) => {
     // Read metadata
     const metadata = await readYamlFile(metadataPath);
 
-    // Get list of files in episode directory
-    const files = await fs.readdir(episodePath);
+    // Get list of files in episode directory with details
+    const fileEntries = await fs.readdir(episodePath, { withFileTypes: true });
+    const files = await Promise.all(
+      fileEntries.map(async (entry) => {
+        const filePath = path.join(episodePath, entry.name);
+        const stats = await fs.stat(filePath);
+        return {
+          name: entry.name,
+          type: entry.isDirectory() ? 'directory' : 'file',
+          size: stats.size,
+          modified: stats.mtime,
+          ext: path.extname(entry.name).toLowerCase()
+        };
+      })
+    );
 
     res.json({
       success: true,

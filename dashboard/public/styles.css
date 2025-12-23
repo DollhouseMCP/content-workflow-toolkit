@@ -543,7 +543,7 @@ footer {
     background-color: var(--surface);
     border: 1px solid var(--border);
     border-radius: 8px;
-    max-width: 800px;
+    max-width: 1200px;
     width: 100%;
     max-height: 90vh;
     overflow-y: auto;
@@ -708,3 +708,229 @@ footer {
 
 .text-center { text-align: center; }
 .text-muted { color: var(--text-secondary); }
+
+/* Media Preview */
+.media-preview-container {
+    background-color: var(--background);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.media-preview {
+    width: 100%;
+    max-height: 400px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: #000;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.media-preview video,
+.media-preview audio,
+.media-preview img {
+    max-width: 100%;
+    max-height: 400px;
+    display: block;
+}
+
+.media-preview video,
+.media-preview img {
+    object-fit: contain;
+}
+
+.media-preview audio {
+    width: 100%;
+}
+
+.media-preview-placeholder {
+    padding: 3rem;
+    text-align: center;
+    color: var(--text-secondary);
+}
+
+.media-preview-placeholder svg,
+.media-preview-placeholder .icon {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+    opacity: 0.5;
+}
+
+/* File Browser */
+.file-browser {
+    background-color: var(--background);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.file-browser-header {
+    padding: 1rem;
+    border-bottom: 1px solid var(--border);
+    font-weight: 600;
+    font-size: 0.875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-secondary);
+    background-color: var(--surface);
+}
+
+.file-list {
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.file-item {
+    display: flex;
+    align-items: center;
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.file-item:last-child {
+    border-bottom: none;
+}
+
+.file-item:hover {
+    background-color: var(--surface);
+}
+
+.file-item.active {
+    background-color: rgba(37, 99, 235, 0.2);
+    border-left: 3px solid var(--primary-color);
+}
+
+.file-icon {
+    width: 24px;
+    height: 24px;
+    margin-right: 0.75rem;
+    font-size: 1.25rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.file-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.file-name {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.file-meta {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    margin-top: 0.25rem;
+}
+
+.file-size {
+    margin-right: 0.75rem;
+}
+
+/* Two-column modal layout */
+.modal-body-grid {
+    display: grid;
+    grid-template-columns: 1fr 400px;
+    gap: 1.5rem;
+}
+
+.modal-main-content {
+    min-width: 0;
+}
+
+.modal-sidebar {
+    min-width: 0;
+}
+
+/* Release Info */
+.release-info-grid {
+    display: grid;
+    gap: 1rem;
+}
+
+.release-info-item {
+    background-color: var(--background);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 1rem;
+}
+
+.release-info-label {
+    font-size: 0.75rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-secondary);
+    margin-bottom: 0.5rem;
+}
+
+.release-info-value {
+    font-size: 0.875rem;
+    color: var(--text-primary);
+}
+
+.dependency-list {
+    list-style: none;
+    padding: 0;
+    margin: 0.5rem 0 0 0;
+}
+
+.dependency-item {
+    padding: 0.5rem;
+    background-color: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    margin-bottom: 0.5rem;
+    font-size: 0.875rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.dependency-item::before {
+    content: '→';
+    color: var(--text-secondary);
+}
+
+/* Distribution badges */
+.distribution-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+}
+
+.platform-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.25rem 0.75rem;
+    background-color: rgba(59, 130, 246, 0.2);
+    color: #60a5fa;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 500;
+}
+
+/* Responsive modal layout */
+@media (max-width: 1024px) {
+    .modal-body-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .modal-sidebar {
+        order: -1;
+    }
+}

@@ -1,0 +1,176 @@
+# Distribution Profiles
+# Predefined platform sets for content distribution
+#
+# Usage in episode metadata.yml:
+#   distribution:
+#     profile: full          # Use a preset
+#   OR
+#   distribution:
+#     platforms: [youtube, blog]  # Custom list
+
+# =============================================================================
+# PROFILES
+# =============================================================================
+
+profiles:
+  # Full multi-platform distribution (default)
+  full:
+    description: "All platforms - maximum reach"
+    platforms:
+      - youtube
+      - blog
+      - linkedin
+      - bluesky
+      - mastodon
+    shorts: true          # Create YouTube Shorts
+    cross_post: true      # Adapt content per platform
+
+  # YouTube-focused with blog companion
+  youtube-blog:
+    description: "Video content with written companion"
+    platforms:
+      - youtube
+      - blog
+    shorts: true
+    cross_post: false
+
+  # YouTube only
+  youtube-only:
+    description: "Video only, no written or social"
+    platforms:
+      - youtube
+    shorts: true
+    cross_post: false
+
+  # Blog only (for written content without video)
+  blog-only:
+    description: "Written content, no video"
+    platforms:
+      - blog
+    shorts: false
+    cross_post: false
+
+  # Minimal - just YouTube and LinkedIn
+  minimal:
+    description: "Quick release to key platforms"
+    platforms:
+      - youtube
+      - linkedin
+    shorts: false
+    cross_post: false
+
+  # Social-focused (no long-form video)
+  social-only:
+    description: "Social platforms without YouTube long-form"
+    platforms:
+      - linkedin
+      - bluesky
+      - mastodon
+    shorts: true          # Can still post Shorts
+    cross_post: true
+
+# =============================================================================
+# PLATFORM DETAILS
+# =============================================================================
+
+platforms:
+  youtube:
+    name: "YouTube"
+    type: video
+    content_types:
+      - long_form         # Standard videos
+      - shorts            # YouTube Shorts (<60s vertical)
+      - live              # Live streams
+    requires:
+      - title
+      - description
+      - tags
+      - thumbnail
+
+  blog:
+    name: "Blog"
+    type: written
+    content_types:
+      - article           # Full blog post
+      - snippet           # Short form
+    requires:
+      - title
+      - body
+      - featured_image
+
+  linkedin:
+    name: "LinkedIn"
+    type: social
+    content_types:
+      - post              # Text post with optional media
+      - article           # LinkedIn article
+      - video             # Native video
+    character_limit: 3000
+    requires:
+      - text
+
+  bluesky:
+    name: "Blue Sky"
+    type: social
+    content_types:
+      - post              # Standard post
+      - thread            # Multi-post thread
+    character_limit: 300
+    requires:
+      - text
+
+  mastodon:
+    name: "Mastodon"
+    type: social
+    content_types:
+      - toot              # Standard post
+      - thread            # Multi-post thread
+    character_limit: 500
+    requires:
+      - text
+
+# =============================================================================
+# CONTENT ADAPTATIONS
+# =============================================================================
+
+# How content transforms per platform when cross_post is enabled
+adaptations:
+  youtube_to_shorts:
+    source: youtube
+    target: shorts
+    transform: "Extract key 30-60s clips"
+
+  youtube_to_blog:
+    source: youtube
+    target: blog
+    transform: "Transcript + screenshots + code blocks"
+
+  youtube_to_linkedin:
+    source: youtube
+    target: linkedin
+    transform: "Professional summary + key takeaways + video link"
+
+  youtube_to_bluesky:
+    source: youtube
+    target: bluesky
+    transform: "Concise hook + link (thread if needed)"
+
+  youtube_to_mastodon:
+    source: youtube
+    target: mastodon
+    transform: "Tech-focused summary + relevant hashtags + link"
+
+  blog_to_linkedin:
+    source: blog
+    target: linkedin
+    transform: "Key insights + call to action + link"
+
+  blog_to_bluesky:
+    source: blog
+    target: bluesky
+    transform: "TLDR + link"
+
+  blog_to_mastodon:
+    source: blog
+    target: mastodon
+    transform: "Summary + hashtags + link"

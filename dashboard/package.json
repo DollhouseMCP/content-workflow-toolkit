@@ -1,0 +1,24 @@
+{
+  "name": "content-workflow-dashboard",
+  "version": "1.0.0",
+  "description": "Dashboard for managing content workflow",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "test": "node --test"
+  },
+  "keywords": ["content", "dashboard", "workflow"],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2",
+    "js-yaml": "^4.1.0",
+    "chokidar": "^3.5.3"
+  },
+  "devDependencies": {
+    "eslint": "^8.57.0"
+  }
+}

@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Content Workflow Dashboard</title>
+    <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+    <div id="app">
+        <header>
+            <h1>Content Workflow Dashboard</h1>
+            <div class="status-bar">
+                <span class="status-indicator" id="connection-status">
+                    <span class="dot"></span> Connected
+                </span>
+            </div>
+        </header>
+
+        <nav class="main-nav">
+            <button class="nav-btn active" data-view="pipeline">Pipeline</button>
+            <button class="nav-btn" data-view="episodes">Episodes</button>
+            <button class="nav-btn" data-view="releases">Release Queue</button>
+            <button class="nav-btn" data-view="assets">Assets</button>
+            <button class="nav-btn" data-view="distribution">Distribution</button>
+        </nav>
+
+        <main id="content">
+            <div class="loading">Loading...</div>
+        </main>
+
+        <footer>
+            <p>Content Workflow Dashboard v1.0</p>
+        </footer>
+    </div>
+
+    <script src="/app.js"></script>
+</body>
+</html>

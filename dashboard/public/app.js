@@ -788,40 +788,324 @@ class Dashboard {
             return;
         }
 
-        const renderTree = (node, level = 0) => {
-            if (node.type === 'file') {
-                return `
-                    <div class="list-item" style="padding-left: ${level * 2}rem;">
-                        <span>📄 ${this.escapeHtml(node.name)}</span>
-                        <small class="text-muted ml-2">${node.ext}</small>
-                    </div>
-                `;
-            }
+        // Initialize asset browser state
+        if (!this.assetBrowserState) {
+            this.assetBrowserState = {
+                expandedFolders: new Set(['assets']),
+                selectedFile: null,
+                searchQuery: '',
+                filterType: 'all'
+            };
+        }
 
-            let html = `
-                <div class="list-item" style="padding-left: ${level * 2}rem; font-weight: 500;">
-                    <span>📁 ${this.escapeHtml(node.name)}/</span>
-                </div>
-            `;
-
-            if (node.children && node.children.length > 0) {
-                html += node.children.map(child => renderTree(child, level + 1)).join('');
-            }
-
-            return html;
-        };
+        const treeData = result.data;
 
         content.innerHTML = `
             <div class="view">
                 <div class="section-header">
-                    <h2>Assets</h2>
-                    <p>Browse media assets and files</p>
+                    <h2>Asset Browser</h2>
+                    <p>Browse and preview media assets</p>
                 </div>
-                <div class="list">
-                    ${renderTree(result.data)}
+
+                <div class="asset-browser-controls">
+                    <div class="search-box">
+                        <input type="text" class="search-input" id="asset-search" placeholder="Search files..." value="${this.escapeHtml(this.assetBrowserState.searchQuery)}">
+                    </div>
+                    <div class="filter-group">
+                        <label class="filter-label">Type:</label>
+                        <select class="filter-select" id="asset-type-filter">
+                            <option value="all" ${this.assetBrowserState.filterType === 'all' ? 'selected' : ''}>All Files</option>
+                            <option value="image" ${this.assetBrowserState.filterType === 'image' ? 'selected' : ''}>Images</option>
+                            <option value="video" ${this.assetBrowserState.filterType === 'video' ? 'selected' : ''}>Videos</option>
+                            <option value="audio" ${this.assetBrowserState.filterType === 'audio' ? 'selected' : ''}>Audio</option>
+                            <option value="document" ${this.assetBrowserState.filterType === 'document' ? 'selected' : ''}>Documents</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="asset-browser-layout">
+                    <div class="asset-tree-panel">
+                        <div class="asset-tree-header">
+                            <span>Folder Structure</span>
+                        </div>
+                        <div class="asset-tree" id="asset-tree">
+                            ${this.renderAssetTree(treeData)}
+                        </div>
+                    </div>
+                    <div class="asset-preview-panel">
+                        <div class="asset-preview-header">
+                            <span>Preview</span>
+                        </div>
+                        <div id="asset-preview-content">
+                            ${this.renderAssetPreview(this.assetBrowserState.selectedFile)}
+                        </div>
+                    </div>
                 </div>
             </div>
         `;
+
+        // Attach event listeners
+        this.attachAssetBrowserListeners();
+    }
+
+    renderAssetTree(node, level = 0, parentPath = '') {
+        const currentPath = parentPath ? `${parentPath}/${node.name}` : node.name;
+        const isExpanded = this.assetBrowserState.expandedFolders.has(currentPath);
+
+        if (node.type === 'file') {
+            // Check if file matches search and filter
+            if (!this.matchesAssetFilter(node)) {
+                return '';
+            }
+
+            const isSelected = this.assetBrowserState.selectedFile &&
+                              this.assetBrowserState.selectedFile.path === node.path;
+
+            return `
+                <div class="asset-tree-item asset-tree-file ${isSelected ? 'selected' : ''}"
+                     style="padding-left: ${(level + 1) * 1.5}rem;"
+                     data-file-path="${this.escapeHtml(node.path)}"
+                     data-file-data="${this.escapeHtml(JSON.stringify(node))}">
+                    <div class="asset-tree-item-content">
+                        <span class="asset-file-icon">${this.getFileIcon(node)}</span>
+                        <span class="asset-tree-name">${this.escapeHtml(node.name)}</span>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Directory
+        const hasMatchingFiles = this.hasMatchingFiles(node);
+        if (!hasMatchingFiles) {
+            return '';
+        }
+
+        const childrenHTML = node.children && node.children.length > 0
+            ? node.children.map(child => this.renderAssetTree(child, level + 1, currentPath)).join('')
+            : '';
+
+        return `
+            <div class="asset-tree-folder">
+                <div class="asset-tree-item asset-tree-directory ${isExpanded ? 'expanded' : ''}"
+                     style="padding-left: ${level * 1.5}rem;"
+                     data-folder-path="${this.escapeHtml(currentPath)}">
+                    <div class="asset-tree-item-content">
+                        <span class="asset-folder-toggle">${isExpanded ? '▼' : '▶'}</span>
+                        <span class="asset-folder-icon">📁</span>
+                        <span class="asset-tree-name">${this.escapeHtml(node.name)}</span>
+                        <span class="asset-folder-count">${node.fileCount || 0}</span>
+                    </div>
+                </div>
+                <div class="asset-tree-children ${isExpanded ? 'expanded' : 'collapsed'}">
+                    ${childrenHTML}
+                </div>
+            </div>
+        `;
+    }
+
+    matchesAssetFilter(file) {
+        const state = this.assetBrowserState;
+
+        // Search filter
+        if (state.searchQuery) {
+            const query = state.searchQuery.toLowerCase();
+            if (!file.name.toLowerCase().includes(query)) {
+                return false;
+            }
+        }
+
+        // Type filter
+        if (state.filterType !== 'all') {
+            const ext = file.ext;
+            switch (state.filterType) {
+                case 'image':
+                    if (!['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg'].includes(ext)) return false;
+                    break;
+                case 'video':
+                    if (!['.mp4', '.mov', '.webm', '.avi'].includes(ext)) return false;
+                    break;
+                case 'audio':
+                    if (!['.mp3', '.wav', '.m4a', '.aac', '.ogg'].includes(ext)) return false;
+                    break;
+                case 'document':
+                    if (!['.md', '.txt', '.pdf', '.doc', '.docx'].includes(ext)) return false;
+                    break;
+            }
+        }
+
+        return true;
+    }
+
+    hasMatchingFiles(node) {
+        if (node.type === 'file') {
+            return this.matchesAssetFilter(node);
+        }
+
+        if (node.children && node.children.length > 0) {
+            return node.children.some(child => this.hasMatchingFiles(child));
+        }
+
+        return false;
+    }
+
+    renderAssetPreview(file) {
+        if (!file) {
+            return `
+                <div class="asset-preview-placeholder">
+                    <div class="asset-preview-icon">📁</div>
+                    <p>Select a file to preview</p>
+                </div>
+            `;
+        }
+
+        const filePath = `/assets/${file.path}`;
+        const ext = file.ext;
+        let previewHTML = '';
+
+        // Image preview
+        if (['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg'].includes(ext)) {
+            previewHTML = `
+                <div class="asset-preview-media">
+                    <img src="${filePath}" alt="${this.escapeHtml(file.name)}"
+                         onload="this.parentElement.dataset.loaded='true'">
+                </div>
+            `;
+        }
+        // Video preview
+        else if (['.mp4', '.mov', '.webm'].includes(ext)) {
+            previewHTML = `
+                <div class="asset-preview-media">
+                    <video controls src="${filePath}">
+                        Your browser does not support video playback.
+                    </video>
+                </div>
+            `;
+        }
+        // Audio preview
+        else if (['.mp3', '.wav', '.m4a', '.aac', '.ogg'].includes(ext)) {
+            previewHTML = `
+                <div class="asset-preview-media audio">
+                    <div class="audio-icon">🎵</div>
+                    <audio controls src="${filePath}">
+                        Your browser does not support audio playback.
+                    </audio>
+                </div>
+            `;
+        }
+        // Markdown preview
+        else if (ext === '.md') {
+            previewHTML = `
+                <div class="asset-preview-document">
+                    <iframe src="${filePath}" frameborder="0"></iframe>
+                </div>
+            `;
+        }
+        // Other files
+        else {
+            previewHTML = `
+                <div class="asset-preview-placeholder">
+                    <div class="asset-preview-icon">${this.getFileIcon(file)}</div>
+                    <p>Preview not available for this file type</p>
+                    <p class="text-muted">${ext}</p>
+                </div>
+            `;
+        }
+
+        return `
+            ${previewHTML}
+            <div class="asset-file-info">
+                <div class="asset-file-info-header">
+                    <h3>${this.escapeHtml(file.name)}</h3>
+                </div>
+                <div class="asset-file-info-grid">
+                    <div class="asset-info-item">
+                        <div class="asset-info-label">File Size</div>
+                        <div class="asset-info-value">${this.formatFileSize(file.size)}</div>
+                    </div>
+                    <div class="asset-info-item">
+                        <div class="asset-info-label">Type</div>
+                        <div class="asset-info-value">${ext.toUpperCase()}</div>
+                    </div>
+                    <div class="asset-info-item">
+                        <div class="asset-info-label">Modified</div>
+                        <div class="asset-info-value">${this.formatFileDate(file.modified)}</div>
+                    </div>
+                    <div class="asset-info-item">
+                        <div class="asset-info-label">Path</div>
+                        <div class="asset-info-value asset-path-value">
+                            <code>${this.escapeHtml(file.path)}</code>
+                            <button class="copy-path-btn" data-path="${this.escapeHtml(file.path)}" title="Copy path">
+                                📋
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    attachAssetBrowserListeners() {
+        // Search input
+        const searchInput = document.getElementById('asset-search');
+        if (searchInput) {
+            searchInput.addEventListener('input', (e) => {
+                this.assetBrowserState.searchQuery = e.target.value;
+                this.renderAssets();
+            });
+        }
+
+        // Type filter
+        const typeFilter = document.getElementById('asset-type-filter');
+        if (typeFilter) {
+            typeFilter.addEventListener('change', (e) => {
+                this.assetBrowserState.filterType = e.target.value;
+                this.renderAssets();
+            });
+        }
+
+        // Folder toggle
+        document.querySelectorAll('.asset-tree-directory').forEach(item => {
+            item.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const folderPath = item.dataset.folderPath;
+
+                if (this.assetBrowserState.expandedFolders.has(folderPath)) {
+                    this.assetBrowserState.expandedFolders.delete(folderPath);
+                } else {
+                    this.assetBrowserState.expandedFolders.add(folderPath);
+                }
+
+                this.renderAssets();
+            });
+        });
+
+        // File selection
+        document.querySelectorAll('.asset-tree-file').forEach(item => {
+            item.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const fileData = JSON.parse(item.dataset.fileData);
+                this.assetBrowserState.selectedFile = fileData;
+                this.renderAssets();
+            });
+        });
+
+        // Copy path button
+        document.querySelectorAll('.copy-path-btn').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                const path = btn.dataset.path;
+
+                try {
+                    await navigator.clipboard.writeText(path);
+                    btn.textContent = '✓';
+                    setTimeout(() => {
+                        btn.textContent = '📋';
+                    }, 2000);
+                } catch (err) {
+                    console.error('Failed to copy path:', err);
+                }
+            });
+        });
     }
 
     async renderDistribution() {

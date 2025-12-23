@@ -63,13 +63,14 @@ async function scanForEpisodes(dir) {
   return episodes;
 }
 
-// Helper: Get directory tree structure
+// Helper: Get directory tree structure with detailed file info
 async function getDirectoryTree(dir, relativeTo = dir) {
   const tree = {
     name: path.basename(dir),
     path: path.relative(relativeTo, dir),
     type: 'directory',
-    children: []
+    children: [],
+    fileCount: 0
   };
 
   try {
@@ -79,16 +80,41 @@ async function getDirectoryTree(dir, relativeTo = dir) {
       const fullPath = path.join(dir, entry.name);
 
       if (entry.isDirectory()) {
-        tree.children.push(await getDirectoryTree(fullPath, relativeTo));
+        const subtree = await getDirectoryTree(fullPath, relativeTo);
+        tree.children.push(subtree);
+        tree.fileCount += subtree.fileCount;
       } else {
+        const stats = await fs.stat(fullPath);
+        const ext = path.extname(entry.name).toLowerCase();
+
+        // Get image dimensions for image files
+        let dimensions = null;
+        if (['.png', '.jpg', '.jpeg', '.gif', '.webp'].includes(ext)) {
+          // Note: We could use sharp or similar library for actual dimensions
+          // For now, we'll just mark it as an image
+          dimensions = { type: 'image' };
+        }
+
         tree.children.push({
           name: entry.name,
           path: path.relative(relativeTo, fullPath),
           type: 'file',
-          ext: path.extname(entry.name)
+          ext: ext,
+          size: stats.size,
+          modified: stats.mtime,
+          dimensions: dimensions
         });
+        tree.fileCount += 1;
       }
     }
+
+    // Sort: directories first, then files alphabetically
+    tree.children.sort((a, b) => {
+      if (a.type === b.type) {
+        return a.name.localeCompare(b.name);
+      }
+      return a.type === 'directory' ? -1 : 1;
+    });
   } catch (error) {
     console.error(`Error reading directory ${dir}:`, error);
   }

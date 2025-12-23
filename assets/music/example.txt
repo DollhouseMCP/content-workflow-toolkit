@@ -1,0 +1,2 @@
+This is a placeholder for background music files.
+Add .mp3, .wav, or .m4a files here.

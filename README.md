@@ -113,4 +113,4 @@ Contributions welcome! Please open an issue or PR.
 
 ## License
 
-MIT
+AGPL 3.0

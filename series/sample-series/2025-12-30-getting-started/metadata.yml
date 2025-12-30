@@ -1,0 +1,135 @@
+# Video Metadata Template
+# Copy this file to your episode folder and fill in the details
+
+# =============================================================================
+# CONTENT STATUS & RELEASE
+# =============================================================================
+
+# Overall content status: draft | ready | staged | released
+# - draft: Still being worked on
+# - ready: Complete, awaiting staging decision
+# - staged: Queued for release (may have conditions/dependencies)
+# - released: Published
+content_status: draft
+
+# Distribution configuration
+distribution:
+  # Use a preset profile (see distribution-profiles.yml): full | youtube-only | blog-only | minimal
+  profile: full
+
+  # Or override with specific platforms (uncomment to use instead of profile)
+  # platforms:
+  #   - youtube
+  #   - blog
+  #   - linkedin
+  #   - bluesky
+  #   - mastodon
+
+# Release conditions (optional - for staged content)
+release:
+  # Target release date/time (optional)
+  target_date: "2025-12-30"
+
+  # Release group ID - links to release-queue.yml for coordinated releases
+  # Leave empty for standalone releases
+  release_group: ""
+
+  # Dependencies - what must happen before release (optional)
+  # Examples: "merview repo public", "v1.0 shipped", "blog post live"
+  depends_on: []
+
+  # Notes about release timing/conditions
+  notes: ""
+
+# =============================================================================
+# VIDEO METADATA
+# =============================================================================
+
+title: "Getting Started with Content Workflow Toolkit"
+description: |
+  Learn how to set up and use the Content Workflow Toolkit - an open-source dashboard
+  and automation system for solo content creators. Perfect for YouTube creators who
+  want to streamline their production workflow.
+
+  In this video, we explore the dashboard, create an episode, and walk through the
+  content pipeline stages from draft to release.
+
+  ## Timestamps
+  0:00 - Intro
+
+  ## Links
+  - GitHub:
+  - Documentation:
+  - Related videos:
+
+  ## Connect
+  - Twitter:
+  - Discord:
+  - Website:
+
+  #DollhouseMCP #MCP #AI #Developer
+
+# Separate with commas
+tags:
+  - MCP
+  - AI
+  - Developer Tools
+  -
+
+# YouTube category (22 = People & Blogs, 28 = Science & Tech)
+category: 28
+
+# Video privacy: public, unlisted, private
+privacy: public
+
+# Playlist to add to (optional)
+playlist: ""
+
+# Scheduled publish time (optional)
+# Format: YYYY-MM-DDTHH:MM:SS.000Z
+scheduled_at: ""
+
+# Thumbnail file path (relative to episode folder)
+thumbnail: "thumbnail.png"
+
+# =============================================================================
+# PRODUCTION DETAILS
+# =============================================================================
+
+# Recording metadata
+recording:
+  date: "2025-12-30"
+  duration_raw: ""
+  duration_final: ""
+  format: "4K" # 4K, 1080p, 720p
+
+# Series info
+series:
+  name: "sample-series"
+  episode_number:
+
+# =============================================================================
+# WORKFLOW PROGRESS
+# =============================================================================
+
+# Production status tracking (checkboxes for workflow stages)
+workflow:
+  scripted: false
+  recorded: false
+  edited: false
+  thumbnail_created: false
+  uploaded: false
+  published: false
+
+# =============================================================================
+# POST-PUBLISH ANALYTICS
+# =============================================================================
+
+# Analytics (filled in after release)
+analytics:
+  youtube_id: ""
+  publish_date: "2025-12-30"
+  views_24h:
+  views_7d:
+  ctr:
+  avg_view_duration:

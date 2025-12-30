@@ -1,0 +1,16 @@
+# Release Queue - Content scheduled for release
+# This file tracks content status and release coordination
+
+releases:
+  - id: getting-started-001
+    series: sample-series
+    episode: 2025-12-30-getting-started
+    status: draft
+    target_date: 2025-01-15
+    platforms:
+      - youtube
+      - twitter
+    dependencies: []
+    notes: "Sample episode for testing the dashboard"
+
+# Status values: draft, ready, staged, released, archived

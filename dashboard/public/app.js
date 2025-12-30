@@ -8,9 +8,85 @@ class Dashboard {
     }
 
     async init() {
+        this.setupMarkdown();
         this.setupEventListeners();
         this.setupLiveReload();
         await this.loadView('pipeline');
+    }
+
+    setupMarkdown() {
+        // Initialize mermaid for diagram rendering
+        try {
+            if (typeof mermaid !== 'undefined') {
+                mermaid.initialize({
+                    startOnLoad: false,
+                    theme: 'dark',
+                    securityLevel: 'loose'
+                });
+            }
+        } catch (e) {
+            console.warn('Mermaid init failed:', e);
+        }
+
+        // Configure marked for markdown rendering
+        try {
+            if (typeof marked !== 'undefined') {
+                marked.setOptions({
+                    breaks: true,
+                    gfm: true
+                });
+            }
+        } catch (e) {
+            console.warn('Marked init failed:', e);
+        }
+    }
+
+    async renderMarkdown(content) {
+        if (typeof marked === 'undefined') {
+            return `<pre>${this.escapeHtml(content)}</pre>`;
+        }
+
+        // Process mermaid diagrams before rendering
+        let processedContent = content;
+        const mermaidBlocks = [];
+        let mermaidIndex = 0;
+
+        // Extract mermaid code blocks
+        processedContent = content.replace(/```mermaid\n([\s\S]*?)```/g, (match, diagram) => {
+            const id = `mermaid-${mermaidIndex++}`;
+            mermaidBlocks.push({ id, diagram: diagram.trim() });
+            return `<div class="mermaid-container" id="${id}"></div>`;
+        });
+
+        // Render markdown
+        let html = marked.parse(processedContent);
+
+        // Sanitize HTML
+        if (typeof DOMPurify !== 'undefined') {
+            html = DOMPurify.sanitize(html, {
+                ADD_TAGS: ['div'],
+                ADD_ATTR: ['id', 'class']
+            });
+        }
+
+        // Render mermaid diagrams after a short delay
+        if (mermaidBlocks.length > 0 && typeof mermaid !== 'undefined') {
+            setTimeout(async () => {
+                for (const block of mermaidBlocks) {
+                    const container = document.getElementById(block.id);
+                    if (container) {
+                        try {
+                            const { svg } = await mermaid.render(`${block.id}-svg`, block.diagram);
+                            container.innerHTML = svg;
+                        } catch (e) {
+                            container.innerHTML = `<pre class="mermaid-error">Diagram error: ${e.message}</pre>`;
+                        }
+                    }
+                }
+            }, 100);
+        }
+
+        return html;
     }
 
     setupEventListeners() {
@@ -791,7 +867,7 @@ class Dashboard {
         // Initialize asset browser state
         if (!this.assetBrowserState) {
             this.assetBrowserState = {
-                expandedFolders: new Set(['assets']),
+                expandedFolders: new Set(['assets', 'assets/branding', 'assets/music', 'assets/thumbnails', 'assets/sound-effects']),
                 selectedFile: null,
                 searchQuery: '',
                 filterType: 'all'
@@ -865,7 +941,7 @@ class Dashboard {
                 <div class="asset-tree-item asset-tree-file ${isSelected ? 'selected' : ''}"
                      style="padding-left: ${(level + 1) * 1.5}rem;"
                      data-file-path="${this.escapeHtml(node.path)}"
-                     data-file-data="${this.escapeHtml(JSON.stringify(node))}">
+                     data-file-data='${JSON.stringify(node).replace(/'/g, "&#39;")}'>
                     <div class="asset-tree-item-content">
                         <span class="asset-file-icon">${this.getFileIcon(node)}</span>
                         <span class="asset-tree-name">${this.escapeHtml(node.name)}</span>
@@ -958,7 +1034,7 @@ class Dashboard {
             `;
         }
 
-        const filePath = `/assets/${file.path}`;
+        const filePath = `/content/${file.path}`;
         const ext = file.ext;
         let previewHTML = '';
 
@@ -995,10 +1071,45 @@ class Dashboard {
         // Markdown preview
         else if (ext === '.md') {
             previewHTML = `
-                <div class="asset-preview-document">
-                    <iframe src="${filePath}" frameborder="0"></iframe>
+                <div class="asset-preview-document markdown-preview" data-file="${filePath}">
+                    <div class="markdown-loading">Loading markdown...</div>
                 </div>
             `;
+            // Fetch and render markdown after DOM update
+            setTimeout(async () => {
+                const container = document.querySelector(`.markdown-preview[data-file="${filePath}"]`);
+                if (container) {
+                    try {
+                        const response = await fetch(filePath);
+                        const text = await response.text();
+                        const renderedHTML = await this.renderMarkdown(text);
+                        container.innerHTML = `<div class="markdown-content">${renderedHTML}</div>`;
+                    } catch (e) {
+                        container.innerHTML = `<div class="markdown-error">Error loading markdown: ${e.message}</div>`;
+                    }
+                }
+            }, 50);
+        }
+        // Text file preview (txt, yml, yaml, json, js, py, sh, css, html, etc.)
+        else if (['.txt', '.yml', '.yaml', '.json', '.js', '.ts', '.py', '.sh', '.css', '.html', '.xml', '.csv', '.log', '.env', '.gitignore', '.config'].includes(ext) || ext === '') {
+            previewHTML = `
+                <div class="asset-preview-document text-preview" data-file="${filePath}">
+                    <div class="markdown-loading">Loading file...</div>
+                </div>
+            `;
+            // Fetch and display text file
+            setTimeout(async () => {
+                const container = document.querySelector(`.text-preview[data-file="${filePath}"]`);
+                if (container) {
+                    try {
+                        const response = await fetch(filePath);
+                        const text = await response.text();
+                        container.innerHTML = `<pre class="text-content">${this.escapeHtml(text)}</pre>`;
+                    } catch (e) {
+                        container.innerHTML = `<div class="markdown-error">Error loading file: ${e.message}</div>`;
+                    }
+                }
+            }, 50);
         }
         // Other files
         else {

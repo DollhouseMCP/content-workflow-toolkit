@@ -11,16 +11,28 @@ permissions:
 jobs:
   review:
     runs-on: ubuntu-latest
-    # Only run if ANTHROPIC_API_KEY secret is configured
-    if: ${{ secrets.ANTHROPIC_API_KEY != '' }}
 
     steps:
+      - name: Check for API key
+        id: check-key
+        env:
+          HAS_KEY: ${{ secrets.ANTHROPIC_API_KEY != '' }}
+        run: |
+          if [ "$HAS_KEY" = "true" ]; then
+            echo "has_key=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_key=false" >> $GITHUB_OUTPUT
+            echo "::notice::ANTHROPIC_API_KEY not configured - skipping Claude review"
+          fi
+
       - name: Checkout code
+        if: steps.check-key.outputs.has_key == 'true'
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
       - name: Claude Code Review
+        if: steps.check-key.outputs.has_key == 'true'
         uses: anthropics/claude-code-action@beta
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}

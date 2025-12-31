@@ -46,6 +46,11 @@ staged:
     target_date: 2025-01-10T14:00:00-08:00
     distribution: youtube-blog
     notes: "Standalone tutorial release"
+  - path: series/sample-series/2025-12-30-getting-started
+    status: draft
+    target_date: 2025-01-15
+    distribution: youtube-only
+    notes: "Sample episode for testing the dashboard"
 
 blocked:
   - path: series/ailish/2024-12-10-demo
@@ -60,3 +65,5 @@ released:
     release_date: 2024-12-05T09:00:00-08:00
     distribution: full
     notes: "Initial launch content"
+
+# Status values: draft, ready, staged, released, archived, blocked

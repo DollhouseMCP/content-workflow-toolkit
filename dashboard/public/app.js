@@ -484,7 +484,7 @@ class Dashboard {
                             <div class="modal-title">${this.escapeHtml(metadata.title || episode.episode)}</div>
                             <div class="modal-subtitle">${this.escapeHtml(episode.series)} / ${this.escapeHtml(episode.episode)}</div>
                         </div>
-                        <button class="modal-close" onclick="document.getElementById('episode-modal').remove()">×</button>
+                        <button class="modal-close" data-modal-close="episode-modal">×</button>
                     </div>
                     <div class="modal-body">
                         <div class="modal-body-grid">
@@ -583,18 +583,17 @@ class Dashboard {
             </div>
         `;
 
-        // Add modal to page
-        document.body.insertAdjacentHTML('beforeend', modalHTML);
+        // Add modal to page with proper cleanup
+        this.showModal('episode-modal', modalHTML);
 
         // Attach file click handlers
         this.attachFileClickHandlers(files, episode.path);
 
-        // Close on overlay click
-        document.getElementById('episode-modal').addEventListener('click', (e) => {
-            if (e.target.id === 'episode-modal') {
-                e.target.remove();
-            }
-        });
+        // Attach close button handler
+        const closeBtn = document.querySelector('[data-modal-close="episode-modal"]');
+        if (closeBtn) {
+            closeBtn.addEventListener('click', () => this.closeModal('episode-modal'));
+        }
     }
 
     isMediaFile(ext) {
@@ -1482,11 +1481,13 @@ class Dashboard {
     }
 
     filterReleaseItems(items, filter) {
-        const now = new Date();
+        // Use start of today for "upcoming" comparison to include items scheduled for today
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
 
         switch (filter) {
             case 'upcoming':
-                return items.filter(item => item.status === 'scheduled' && item.date >= now);
+                return items.filter(item => item.status === 'scheduled' && item.date >= today);
             case 'released':
                 return items.filter(item => item.status === 'released');
             default:
@@ -1693,6 +1694,62 @@ class Dashboard {
         return new Date(year, month - 1, day);
     }
 
+    // Show modal with proper cleanup and keyboard support
+    showModal(modalId, modalHTML) {
+        // Remove any existing modal with same ID
+        const existingModal = document.getElementById(modalId);
+        if (existingModal) {
+            existingModal.remove();
+        }
+
+        // Remove any lingering modal keyboard listener
+        if (this._modalKeyHandler) {
+            document.removeEventListener('keydown', this._modalKeyHandler);
+        }
+
+        // Insert modal
+        document.body.insertAdjacentHTML('beforeend', modalHTML);
+
+        const modal = document.getElementById(modalId);
+
+        // Click on overlay to close
+        const clickHandler = (e) => {
+            if (e.target.id === modalId) {
+                this.closeModal(modalId);
+            }
+        };
+        modal.addEventListener('click', clickHandler);
+
+        // Escape key to close
+        this._modalKeyHandler = (e) => {
+            if (e.key === 'Escape') {
+                this.closeModal(modalId);
+            }
+        };
+        document.addEventListener('keydown', this._modalKeyHandler);
+
+        // Store handlers for cleanup
+        modal._clickHandler = clickHandler;
+    }
+
+    // Close and cleanup modal
+    closeModal(modalId) {
+        const modal = document.getElementById(modalId);
+        if (modal) {
+            // Remove click listener
+            if (modal._clickHandler) {
+                modal.removeEventListener('click', modal._clickHandler);
+            }
+            modal.remove();
+        }
+
+        // Remove keyboard listener
+        if (this._modalKeyHandler) {
+            document.removeEventListener('keydown', this._modalKeyHandler);
+            this._modalKeyHandler = null;
+        }
+    }
+
     // Create a safe serializable version of a release item (avoids circular references)
     serializeReleaseItem(item) {
         const safeItem = {
@@ -1823,10 +1880,21 @@ class Dashboard {
 
         // Fallback to fetching if cache is empty
         if (!releaseItems || releaseItems.length === 0) {
-            const episodesResult = await this.fetchAPI('/episodes');
-            const releaseQueueResult = await this.fetchAPI('/releases');
-            const releaseQueue = releaseQueueResult.success ? releaseQueueResult.data : {};
-            releaseItems = this.collectReleaseItems(episodesResult.episodes, releaseQueue);
+            try {
+                const episodesResult = await this.fetchAPI('/episodes');
+                const releaseQueueResult = await this.fetchAPI('/releases').catch(() => ({ success: false, data: {} }));
+
+                if (!episodesResult.success) {
+                    console.error('Failed to load episodes for day modal');
+                    releaseItems = [];
+                } else {
+                    const releaseQueue = releaseQueueResult.success ? releaseQueueResult.data : {};
+                    releaseItems = this.collectReleaseItems(episodesResult.episodes, releaseQueue);
+                }
+            } catch (error) {
+                console.error('Error loading day modal data:', error);
+                releaseItems = [];
+            }
         }
 
         const dayItems = releaseItems.filter(item => {
@@ -1866,7 +1934,7 @@ class Dashboard {
                             <div class="modal-title">Releases for ${formattedDate}</div>
                             <div class="modal-subtitle">${dayItems.length} item${dayItems.length !== 1 ? 's' : ''}</div>
                         </div>
-                        <button class="modal-close" onclick="document.getElementById('day-modal').remove()">×</button>
+                        <button class="modal-close" data-modal-close="day-modal">×</button>
                     </div>
                     <div class="modal-body">
                         ${itemsHTML}
@@ -1875,13 +1943,13 @@ class Dashboard {
             </div>
         `;
 
-        document.body.insertAdjacentHTML('beforeend', modalHTML);
+        this.showModal('day-modal', modalHTML);
 
-        document.getElementById('day-modal').addEventListener('click', (e) => {
-            if (e.target.id === 'day-modal') {
-                e.target.remove();
-            }
-        });
+        // Attach close button handler
+        const closeBtn = document.querySelector('[data-modal-close="day-modal"]');
+        if (closeBtn) {
+            closeBtn.addEventListener('click', () => this.closeModal('day-modal'));
+        }
     }
 
     showReleaseItemModal(item) {
@@ -1989,7 +2057,7 @@ class Dashboard {
                             <div class="modal-title">${this.escapeHtml(item.title)}</div>
                             <div class="modal-subtitle">${formattedDate}</div>
                         </div>
-                        <button class="modal-close" onclick="document.getElementById('release-item-modal').remove()">×</button>
+                        <button class="modal-close" data-modal-close="release-item-modal">×</button>
                     </div>
                     <div class="modal-body">
                         ${detailsHTML}
@@ -1998,13 +2066,13 @@ class Dashboard {
             </div>
         `;
 
-        document.body.insertAdjacentHTML('beforeend', modalHTML);
+        this.showModal('release-item-modal', modalHTML);
 
-        document.getElementById('release-item-modal').addEventListener('click', (e) => {
-            if (e.target.id === 'release-item-modal') {
-                e.target.remove();
-            }
-        });
+        // Attach close button handler
+        const closeBtn = document.querySelector('[data-modal-close="release-item-modal"]');
+        if (closeBtn) {
+            closeBtn.addEventListener('click', () => this.closeModal('release-item-modal'));
+        }
     }
 
     getStatusClass(status) {

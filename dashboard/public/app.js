@@ -1391,7 +1391,14 @@ class Dashboard {
 
     collectReleaseItems(episodes, releaseQueue) {
         const items = [];
-        const now = new Date();
+
+        // Helper to safely parse dates and validate them
+        const parseDate = (dateString) => {
+            if (!dateString) return null;
+            const date = new Date(dateString);
+            // Check if date is valid (not NaN)
+            return isNaN(date.getTime()) ? null : date;
+        };
 
         // Collect from episodes
         episodes.forEach(episode => {
@@ -1400,11 +1407,12 @@ class Dashboard {
             const analytics = metadata.analytics || {};
 
             // Target date (scheduled)
-            if (release.target_date) {
+            const targetDate = parseDate(release.target_date);
+            if (targetDate) {
                 items.push({
                     type: 'episode',
                     status: 'scheduled',
-                    date: new Date(release.target_date),
+                    date: targetDate,
                     episode: episode,
                     title: metadata.title || episode.episode,
                     series: episode.series,
@@ -1414,11 +1422,12 @@ class Dashboard {
             }
 
             // Actual publish date
-            if (analytics.publish_date) {
+            const publishDate = parseDate(analytics.publish_date);
+            if (publishDate) {
                 items.push({
                     type: 'episode',
                     status: 'released',
-                    date: new Date(analytics.publish_date),
+                    date: publishDate,
                     episode: episode,
                     title: metadata.title || episode.episode,
                     series: episode.series,
@@ -1431,11 +1440,12 @@ class Dashboard {
         // Collect from release groups
         if (releaseQueue.release_groups) {
             Object.entries(releaseQueue.release_groups).forEach(([id, group]) => {
-                if (group.target_date) {
+                const groupDate = parseDate(group.target_date);
+                if (groupDate) {
                     items.push({
                         type: 'release_group',
                         status: group.status === 'released' ? 'released' : 'scheduled',
-                        date: new Date(group.target_date),
+                        date: groupDate,
                         groupId: id,
                         group: group,
                         title: group.name || id,
@@ -1448,11 +1458,12 @@ class Dashboard {
         // Collect from staged items
         if (releaseQueue.staged) {
             releaseQueue.staged.forEach(item => {
-                if (item.target_date) {
+                const stagedDate = parseDate(item.target_date);
+                if (stagedDate) {
                     items.push({
                         type: 'staged',
                         status: 'scheduled',
-                        date: new Date(item.target_date),
+                        date: stagedDate,
                         stagedItem: item,
                         title: item.path,
                         path: item.path
@@ -1464,11 +1475,12 @@ class Dashboard {
         // Collect from released items
         if (releaseQueue.released) {
             releaseQueue.released.forEach(item => {
-                if (item.release_date) {
+                const releasedDate = parseDate(item.release_date);
+                if (releasedDate) {
                     items.push({
                         type: 'released',
                         status: 'released',
-                        date: new Date(item.release_date),
+                        date: releasedDate,
                         releasedItem: item,
                         title: item.path,
                         path: item.path

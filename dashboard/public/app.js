@@ -1,5 +1,21 @@
 // Content Workflow Dashboard - Frontend Application
 
+// Configuration constants
+const DASHBOARD_CONFIG = {
+    // Calendar display settings
+    CALENDAR_MAX_ITEMS_PER_DAY: 3,
+    CALENDAR_TITLE_MAX_LENGTH: 20,
+
+    // UI feedback delays (milliseconds)
+    COPY_BUTTON_RESET_DELAY: 2000,
+    MARKDOWN_RENDER_DELAY: 50,
+    MERMAID_RENDER_DELAY: 100,
+
+    // File size display
+    FILE_SIZE_UNIT: 1024,
+    FILE_SIZE_LABELS: ['Bytes', 'KB', 'MB', 'GB']
+};
+
 class Dashboard {
     constructor() {
         this.currentView = 'episodes';
@@ -83,7 +99,7 @@ class Dashboard {
                         }
                     }
                 }
-            }, 100);
+            }, DASHBOARD_CONFIG.MERMAID_RENDER_DELAY);
         }
 
         return html;
@@ -599,8 +615,8 @@ class Dashboard {
 
     formatFileSize(bytes) {
         if (bytes === 0) return '0 Bytes';
-        const k = 1024;
-        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+        const k = DASHBOARD_CONFIG.FILE_SIZE_UNIT;
+        const sizes = DASHBOARD_CONFIG.FILE_SIZE_LABELS;
         const i = Math.floor(Math.log(bytes) / Math.log(k));
         return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
     }
@@ -1091,7 +1107,7 @@ class Dashboard {
                         container.innerHTML = `<div class="markdown-error">Error loading markdown: ${e.message}</div>`;
                     }
                 }
-            }, 50);
+            }, DASHBOARD_CONFIG.MARKDOWN_RENDER_DELAY);
         }
         // Text file preview (txt, yml, yaml, json, js, py, sh, css, html, etc.)
         else if (['.txt', '.yml', '.yaml', '.json', '.js', '.ts', '.py', '.sh', '.css', '.html', '.xml', '.csv', '.log', '.env', '.gitignore', '.config'].includes(ext) || ext === '') {
@@ -1112,7 +1128,7 @@ class Dashboard {
                         container.innerHTML = `<div class="markdown-error">Error loading file: ${e.message}</div>`;
                     }
                 }
-            }, 50);
+            }, DASHBOARD_CONFIG.MARKDOWN_RENDER_DELAY);
         }
         // Other files
         else {
@@ -1159,29 +1175,57 @@ class Dashboard {
     }
 
     attachAssetBrowserListeners() {
-        // Search input
-        const searchInput = document.getElementById('asset-search');
-        if (searchInput) {
-            searchInput.addEventListener('input', (e) => {
-                this.assetBrowserState.searchQuery = e.target.value;
-                this.renderAssets();
-            });
+        // Use event delegation on the content element to avoid memory leaks
+        const content = document.getElementById('content');
+        if (!content) return;
+
+        // Remove existing asset browser listeners if present
+        if (this._assetClickHandler) {
+            content.removeEventListener('click', this._assetClickHandler);
+        }
+        if (this._assetInputHandler) {
+            content.removeEventListener('input', this._assetInputHandler);
+        }
+        if (this._assetChangeHandler) {
+            content.removeEventListener('change', this._assetChangeHandler);
         }
 
-        // Type filter
-        const typeFilter = document.getElementById('asset-type-filter');
-        if (typeFilter) {
-            typeFilter.addEventListener('change', (e) => {
-                this.assetBrowserState.filterType = e.target.value;
-                this.renderAssets();
-            });
-        }
+        // Create delegated click handler
+        this._assetClickHandler = async (e) => {
+            const target = e.target;
 
-        // Folder toggle
-        document.querySelectorAll('.asset-tree-directory').forEach(item => {
-            item.addEventListener('click', (e) => {
+            // Copy path button
+            const copyBtn = target.closest('.copy-path-btn');
+            if (copyBtn) {
                 e.stopPropagation();
-                const folderPath = item.dataset.folderPath;
+                const path = copyBtn.dataset.path;
+                try {
+                    await navigator.clipboard.writeText(path);
+                    copyBtn.textContent = '✓';
+                    setTimeout(() => {
+                        copyBtn.textContent = '📋';
+                    }, DASHBOARD_CONFIG.COPY_BUTTON_RESET_DELAY);
+                } catch (err) {
+                    console.error('Failed to copy path:', err);
+                }
+                return;
+            }
+
+            // File selection
+            const fileItem = target.closest('.asset-tree-file');
+            if (fileItem) {
+                e.stopPropagation();
+                const fileData = JSON.parse(fileItem.dataset.fileData);
+                this.assetBrowserState.selectedFile = fileData;
+                this.renderAssets();
+                return;
+            }
+
+            // Folder toggle
+            const folderItem = target.closest('.asset-tree-directory');
+            if (folderItem) {
+                e.stopPropagation();
+                const folderPath = folderItem.dataset.folderPath;
 
                 if (this.assetBrowserState.expandedFolders.has(folderPath)) {
                     this.assetBrowserState.expandedFolders.delete(folderPath);
@@ -1190,36 +1234,29 @@ class Dashboard {
                 }
 
                 this.renderAssets();
-            });
-        });
+                return;
+            }
+        };
 
-        // File selection
-        document.querySelectorAll('.asset-tree-file').forEach(item => {
-            item.addEventListener('click', (e) => {
-                e.stopPropagation();
-                const fileData = JSON.parse(item.dataset.fileData);
-                this.assetBrowserState.selectedFile = fileData;
+        // Create delegated input handler (for search)
+        this._assetInputHandler = (e) => {
+            if (e.target.id === 'asset-search') {
+                this.assetBrowserState.searchQuery = e.target.value;
                 this.renderAssets();
-            });
-        });
+            }
+        };
 
-        // Copy path button
-        document.querySelectorAll('.copy-path-btn').forEach(btn => {
-            btn.addEventListener('click', async (e) => {
-                e.stopPropagation();
-                const path = btn.dataset.path;
+        // Create delegated change handler (for type filter)
+        this._assetChangeHandler = (e) => {
+            if (e.target.id === 'asset-type-filter') {
+                this.assetBrowserState.filterType = e.target.value;
+                this.renderAssets();
+            }
+        };
 
-                try {
-                    await navigator.clipboard.writeText(path);
-                    btn.textContent = '✓';
-                    setTimeout(() => {
-                        btn.textContent = '📋';
-                    }, 2000);
-                } catch (err) {
-                    console.error('Failed to copy path:', err);
-                }
-            });
-        });
+        content.addEventListener('click', this._assetClickHandler);
+        content.addEventListener('input', this._assetInputHandler);
+        content.addEventListener('change', this._assetChangeHandler);
     }
 
     async renderDistribution() {
@@ -1270,14 +1307,31 @@ class Dashboard {
     }
 
     async renderCalendar() {
-        const episodesResult = await this.fetchAPI('/episodes');
-        const releaseQueueResult = await this.fetchAPI('/releases');
         const content = document.getElementById('content');
+
+        let episodesResult, releaseQueueResult;
+        try {
+            [episodesResult, releaseQueueResult] = await Promise.all([
+                this.fetchAPI('/episodes'),
+                this.fetchAPI('/releases').catch(err => {
+                    console.warn('Failed to load release queue:', err);
+                    return { success: false, data: {} };
+                })
+            ]);
+        } catch (error) {
+            content.innerHTML = `<div class="error">Failed to load calendar data: ${this.escapeHtml(error.message)}</div>`;
+            return;
+        }
 
         if (!episodesResult.success) {
             content.innerHTML = '<div class="error">Failed to load episodes</div>';
             return;
         }
+
+        // Show warning if release queue failed but episodes loaded
+        const releaseQueueWarning = !releaseQueueResult.success
+            ? '<div class="warning" style="margin-bottom: 1rem; padding: 0.5rem; background: var(--warning); color: var(--background); border-radius: 4px;">Warning: Release queue data unavailable. Some scheduled releases may not appear.</div>'
+            : '';
 
         // Initialize calendar state
         if (!this.calendarState) {
@@ -1294,6 +1348,10 @@ class Dashboard {
         // Collect all release dates from episodes and release queue
         const releaseItems = this.collectReleaseItems(episodesResult.episodes, releaseQueue);
 
+        // Cache release items for use in modals (avoids refetching)
+        this._cachedReleaseItems = releaseItems;
+        this._cachedReleaseGroups = releaseGroups;
+
         // Filter items based on current filter
         const filteredItems = this.filterReleaseItems(releaseItems, this.calendarState.filter);
 
@@ -1303,6 +1361,8 @@ class Dashboard {
                     <h2>Release Calendar</h2>
                     <p>Scheduled and released content timeline</p>
                 </div>
+
+                ${releaseQueueWarning}
 
                 <div class="calendar-controls">
                     <div class="calendar-view-toggle">
@@ -1451,10 +1511,10 @@ class Dashboard {
         // Calculate total cells needed
         const totalCells = Math.ceil((daysInMonth + startDayOfWeek) / 7) * 7;
 
-        // Group items by date
+        // Group items by date (using local timezone)
         const itemsByDate = {};
         items.forEach(item => {
-            const dateKey = item.date.toISOString().split('T')[0];
+            const dateKey = this.getLocalDateKey(item.date);
             if (!itemsByDate[dateKey]) {
                 itemsByDate[dateKey] = [];
             }
@@ -1501,18 +1561,19 @@ class Dashboard {
                 cellDate = new Date(year, month, dayNumber);
             }
 
-            const dateKey = cellDate.toISOString().split('T')[0];
+            const dateKey = this.getLocalDateKey(cellDate);
             const dayItems = itemsByDate[dateKey] || [];
             const hasItems = dayItems.length > 0;
             const isToday = this.isSameDate(cellDate, new Date());
 
-            const itemsHTML = dayItems.slice(0, 3).map(item => {
+            const itemsHTML = dayItems.slice(0, DASHBOARD_CONFIG.CALENDAR_MAX_ITEMS_PER_DAY).map(item => {
                 const seriesClass = item.series ? this.getSeriesBadgeClass(item.series) : 'default';
                 const icon = item.type === 'release_group' ? '🔗' : (item.status === 'released' ? '✓' : '📅');
-                return `<div class="calendar-day-item ${item.status}" data-item="${this.escapeHtml(JSON.stringify(item))}">${icon} ${this.escapeHtml(item.title.substring(0, 20))}</div>`;
+                const safeItem = this.serializeReleaseItem(item);
+                return `<div class="calendar-day-item ${item.status}" data-item='${JSON.stringify(safeItem).replace(/'/g, "&#39;")}'>${icon} ${this.escapeHtml(item.title.substring(0, DASHBOARD_CONFIG.CALENDAR_TITLE_MAX_LENGTH))}</div>`;
             }).join('');
 
-            const moreCount = dayItems.length > 3 ? dayItems.length - 3 : 0;
+            const moreCount = dayItems.length > DASHBOARD_CONFIG.CALENDAR_MAX_ITEMS_PER_DAY ? dayItems.length - DASHBOARD_CONFIG.CALENDAR_MAX_ITEMS_PER_DAY : 0;
             const moreHTML = moreCount > 0 ? `<div class="calendar-day-more">+${moreCount} more</div>` : '';
 
             calendarHTML += `
@@ -1535,10 +1596,10 @@ class Dashboard {
             return '<div class="text-center text-muted" style="padding: 3rem;">No releases found</div>';
         }
 
-        // Group items by date
+        // Group items by date (using local timezone)
         const itemsByDate = {};
         items.forEach(item => {
-            const dateKey = item.date.toISOString().split('T')[0];
+            const dateKey = this.getLocalDateKey(item.date);
             if (!itemsByDate[dateKey]) {
                 itemsByDate[dateKey] = [];
             }
@@ -1551,7 +1612,7 @@ class Dashboard {
 
         sortedDates.forEach(dateKey => {
             const dayItems = itemsByDate[dateKey];
-            const date = new Date(dateKey + 'T00:00:00');
+            const date = this.parseLocalDateKey(dateKey);
             const formattedDate = date.toLocaleDateString('en-US', {
                 weekday: 'long',
                 year: 'numeric',
@@ -1618,83 +1679,162 @@ class Dashboard {
                date1.getDate() === date2.getDate();
     }
 
-    attachCalendarListeners() {
-        // View mode toggle
-        document.querySelectorAll('.toggle-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                const mode = e.target.dataset.mode;
-                this.calendarState.viewMode = mode;
-                this.renderCalendar();
-            });
-        });
+    // Get a date key in YYYY-MM-DD format using local timezone (not UTC)
+    getLocalDateKey(date) {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    }
 
-        // Filter change
-        const filterSelect = document.getElementById('calendar-filter');
-        if (filterSelect) {
-            filterSelect.addEventListener('change', (e) => {
-                this.calendarState.filter = e.target.value;
-                this.renderCalendar();
-            });
+    // Parse a date key as local date (not UTC)
+    parseLocalDateKey(dateKey) {
+        const [year, month, day] = dateKey.split('-').map(Number);
+        return new Date(year, month - 1, day);
+    }
+
+    // Create a safe serializable version of a release item (avoids circular references)
+    serializeReleaseItem(item) {
+        const safeItem = {
+            type: item.type,
+            status: item.status,
+            date: item.date.toISOString(),
+            title: item.title,
+            series: item.series,
+            releaseGroup: item.releaseGroup,
+            contentStatus: item.contentStatus,
+            path: item.path,
+            groupId: item.groupId,
+            itemCount: item.itemCount
+        };
+
+        // Include minimal episode info if present
+        if (item.episode) {
+            safeItem.episode = {
+                series: item.episode.series,
+                episode: item.episode.episode,
+                path: item.episode.path,
+                metadata: item.episode.metadata ? {
+                    title: item.episode.metadata.title,
+                    description: item.episode.metadata.description,
+                    content_status: item.episode.metadata.content_status,
+                    release: item.episode.metadata.release
+                } : null
+            };
         }
 
-        // Month navigation
-        const prevBtn = document.getElementById('prev-month');
-        const nextBtn = document.getElementById('next-month');
+        // Include minimal group info if present
+        if (item.group) {
+            safeItem.group = {
+                name: item.group.name,
+                status: item.group.status,
+                description: item.group.description,
+                items: item.group.items,
+                dependencies: item.group.dependencies
+            };
+        }
 
-        if (prevBtn) {
-            prevBtn.addEventListener('click', () => {
+        return safeItem;
+    }
+
+    attachCalendarListeners() {
+        // Use event delegation on the content element to avoid memory leaks
+        const content = document.getElementById('content');
+        if (!content) return;
+
+        // Remove existing calendar listener if present (prevents memory leaks)
+        if (this._calendarClickHandler) {
+            content.removeEventListener('click', this._calendarClickHandler);
+        }
+        if (this._calendarChangeHandler) {
+            content.removeEventListener('change', this._calendarChangeHandler);
+        }
+
+        // Create delegated click handler
+        this._calendarClickHandler = (e) => {
+            const target = e.target;
+
+            // View mode toggle
+            if (target.classList.contains('toggle-btn') && target.dataset.mode) {
+                this.calendarState.viewMode = target.dataset.mode;
+                this.renderCalendar();
+                return;
+            }
+
+            // Month navigation - prev
+            if (target.id === 'prev-month' || target.closest('#prev-month')) {
                 this.calendarState.currentDate = new Date(
                     this.calendarState.currentDate.getFullYear(),
                     this.calendarState.currentDate.getMonth() - 1,
                     1
                 );
                 this.renderCalendar();
-            });
-        }
+                return;
+            }
 
-        if (nextBtn) {
-            nextBtn.addEventListener('click', () => {
+            // Month navigation - next
+            if (target.id === 'next-month' || target.closest('#next-month')) {
                 this.calendarState.currentDate = new Date(
                     this.calendarState.currentDate.getFullYear(),
                     this.calendarState.currentDate.getMonth() + 1,
                     1
                 );
                 this.renderCalendar();
-            });
-        }
+                return;
+            }
 
-        // Day click (show items for that day)
-        document.querySelectorAll('.calendar-day.has-items').forEach(day => {
-            day.addEventListener('click', (e) => {
-                if (!e.target.closest('.calendar-day-item')) {
-                    const dateKey = day.dataset.date;
-                    this.showDayModal(dateKey);
-                }
-            });
-        });
-
-        // Item click
-        document.querySelectorAll('.calendar-day-item').forEach(item => {
-            item.addEventListener('click', (e) => {
+            // Calendar day item click
+            const dayItem = target.closest('.calendar-day-item');
+            if (dayItem) {
                 e.stopPropagation();
-                const itemData = JSON.parse(item.dataset.item);
+                const itemData = JSON.parse(dayItem.dataset.item);
+                // Reconstruct date from ISO string
+                if (itemData.date) {
+                    itemData.date = new Date(itemData.date);
+                }
                 this.showReleaseItemModal(itemData);
-            });
-        });
+                return;
+            }
+
+            // Calendar day click (show items for that day)
+            const calendarDay = target.closest('.calendar-day.has-items');
+            if (calendarDay && !target.closest('.calendar-day-item')) {
+                const dateKey = calendarDay.dataset.date;
+                this.showDayModal(dateKey);
+                return;
+            }
+        };
+
+        // Create delegated change handler
+        this._calendarChangeHandler = (e) => {
+            if (e.target.id === 'calendar-filter') {
+                this.calendarState.filter = e.target.value;
+                this.renderCalendar();
+            }
+        };
+
+        content.addEventListener('click', this._calendarClickHandler);
+        content.addEventListener('change', this._calendarChangeHandler);
     }
 
     async showDayModal(dateKey) {
-        const episodesResult = await this.fetchAPI('/episodes');
-        const releaseQueueResult = await this.fetchAPI('/releases');
-        const releaseQueue = releaseQueueResult.success ? releaseQueueResult.data : {};
-        const releaseItems = this.collectReleaseItems(episodesResult.episodes, releaseQueue);
+        // Use cached release items if available (from renderCalendar)
+        let releaseItems = this._cachedReleaseItems;
+
+        // Fallback to fetching if cache is empty
+        if (!releaseItems || releaseItems.length === 0) {
+            const episodesResult = await this.fetchAPI('/episodes');
+            const releaseQueueResult = await this.fetchAPI('/releases');
+            const releaseQueue = releaseQueueResult.success ? releaseQueueResult.data : {};
+            releaseItems = this.collectReleaseItems(episodesResult.episodes, releaseQueue);
+        }
 
         const dayItems = releaseItems.filter(item => {
-            const itemDateKey = item.date.toISOString().split('T')[0];
+            const itemDateKey = this.getLocalDateKey(item.date);
             return itemDateKey === dateKey;
         });
 
-        const date = new Date(dateKey + 'T00:00:00');
+        const date = this.parseLocalDateKey(dateKey);
         const formattedDate = date.toLocaleDateString('en-US', {
             weekday: 'long',
             year: 'numeric',

@@ -1,7 +1,11 @@
-const express = require('express');
-const fs = require('fs').promises;
-const path = require('path');
-const yaml = require('js-yaml');
+import express from 'express';
+import fs from 'fs/promises';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import yaml from 'js-yaml';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const router = express.Router();
 
@@ -652,4 +656,4 @@ router.post('/episodes', async (req, res) => {
   }
 });
 
-module.exports = router;
+export default router;

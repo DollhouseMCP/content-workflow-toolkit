@@ -1393,10 +1393,21 @@ class Dashboard {
         const items = [];
 
         // Helper to safely parse dates and validate them
+        // Handles both YYYY-MM-DD (local) and ISO 8601 (with timezone) formats
         const parseDate = (dateString) => {
             if (!dateString) return null;
+
+            // Check if it's a simple YYYY-MM-DD format (no time component)
+            // These should be parsed as local dates, not UTC
+            const dateOnlyMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateString);
+            if (dateOnlyMatch) {
+                const [, year, month, day] = dateOnlyMatch;
+                const date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+                return isNaN(date.getTime()) ? null : date;
+            }
+
+            // For ISO 8601 or other formats, use standard parsing
             const date = new Date(dateString);
-            // Check if date is valid (not NaN)
             return isNaN(date.getTime()) ? null : date;
         };
 
@@ -1508,6 +1519,9 @@ class Dashboard {
     }
 
     renderCalendarView(items, releaseGroups) {
+        // Reset calendar item cache for index-based lookups (XSS prevention)
+        this._calendarItemCache = [];
+
         const year = this.calendarState.currentDate.getFullYear();
         const month = this.calendarState.currentDate.getMonth();
 
@@ -1579,11 +1593,17 @@ class Dashboard {
             const hasItems = dayItems.length > 0;
             const isToday = this.isSameDate(cellDate, new Date());
 
-            const itemsHTML = dayItems.slice(0, DASHBOARD_CONFIG.CALENDAR_MAX_ITEMS_PER_DAY).map(item => {
+            const itemsHTML = dayItems.slice(0, DASHBOARD_CONFIG.CALENDAR_MAX_ITEMS_PER_DAY).map((item, idx) => {
                 const seriesClass = item.series ? this.getSeriesBadgeClass(item.series) : 'default';
                 const icon = item.type === 'release_group' ? '🔗' : (item.status === 'released' ? '✓' : '📅');
-                const safeItem = this.serializeReleaseItem(item);
-                return `<div class="calendar-day-item ${item.status}" data-item='${JSON.stringify(safeItem).replace(/'/g, "&#39;")}'>${icon} ${this.escapeHtml(item.title.substring(0, DASHBOARD_CONFIG.CALENDAR_TITLE_MAX_LENGTH))}</div>`;
+                // Use index-based lookup to avoid embedding JSON in HTML (XSS prevention)
+                const itemIndex = this._calendarItemCache ? this._calendarItemCache.length : 0;
+                if (!this._calendarItemCache) this._calendarItemCache = [];
+                this._calendarItemCache.push(item);
+                // Safely handle missing or undefined title
+                const title = item.title || 'Untitled';
+                const truncatedTitle = title.substring(0, DASHBOARD_CONFIG.CALENDAR_TITLE_MAX_LENGTH);
+                return `<div class="calendar-day-item ${item.status}" data-item-index="${itemIndex}">${icon} ${this.escapeHtml(truncatedTitle)}</div>`;
             }).join('');
 
             const moreCount = dayItems.length > DASHBOARD_CONFIG.CALENDAR_MAX_ITEMS_PER_DAY ? dayItems.length - DASHBOARD_CONFIG.CALENDAR_MAX_ITEMS_PER_DAY : 0;
@@ -1856,12 +1876,12 @@ class Dashboard {
             const dayItem = target.closest('.calendar-day-item');
             if (dayItem) {
                 e.stopPropagation();
-                const itemData = JSON.parse(dayItem.dataset.item);
-                // Reconstruct date from ISO string
-                if (itemData.date) {
-                    itemData.date = new Date(itemData.date);
+                // Use index-based lookup from cache (XSS prevention - no JSON in HTML)
+                const itemIndex = parseInt(dayItem.dataset.itemIndex, 10);
+                const itemData = this._calendarItemCache && this._calendarItemCache[itemIndex];
+                if (itemData) {
+                    this.showReleaseItemModal(itemData);
                 }
-                this.showReleaseItemModal(itemData);
                 return;
             }
 

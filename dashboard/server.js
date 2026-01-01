@@ -6,6 +6,9 @@ const apiRoutes = require('./api');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Parse JSON request bodies
+app.use(express.json());
+
 // Serve static files from public directory
 app.use(express.static(path.join(__dirname, 'public')));
 

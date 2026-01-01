@@ -319,7 +319,11 @@ class Dashboard {
 
         // Attach click listeners to episode cards
         document.querySelectorAll('.episode-card').forEach(card => {
-            card.addEventListener('click', () => {
+            card.addEventListener('click', (e) => {
+                // Don't open modal if clicking on status dropdown
+                if (e.target.closest('.status-dropdown-container') || e.target.closest('.status-dropdown')) {
+                    return;
+                }
                 const episodePath = card.dataset.episodePath;
                 const episode = episodes.find(ep => ep.path === episodePath);
                 if (episode) {
@@ -327,6 +331,116 @@ class Dashboard {
                 }
             });
         });
+
+        // Attach inline status dropdown handlers
+        this.attachInlineStatusHandlers(episodes);
+    }
+
+    // Attach inline status dropdown handlers
+    attachInlineStatusHandlers(episodes) {
+        document.querySelectorAll('.status-badge-clickable').forEach(badge => {
+            badge.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const container = badge.closest('.status-dropdown-container');
+                if (!container) return;
+
+                // Close any existing dropdown
+                this.closeStatusDropdowns();
+
+                // Get current status
+                const currentStatus = badge.dataset.currentStatus;
+
+                // Create dropdown
+                const dropdown = document.createElement('div');
+                dropdown.className = 'status-dropdown';
+                dropdown.innerHTML = ['draft', 'ready', 'staged', 'released'].map(status => `
+                    <div class="status-dropdown-item ${status === currentStatus ? 'active' : ''}" data-status="${status}">
+                        <span class="status-dot ${status}"></span>
+                        <span>${status}</span>
+                    </div>
+                `).join('');
+
+                container.appendChild(dropdown);
+
+                // Handle dropdown item clicks
+                dropdown.querySelectorAll('.status-dropdown-item').forEach(item => {
+                    item.addEventListener('click', async (e) => {
+                        e.stopPropagation();
+                        const newStatus = item.dataset.status;
+                        if (newStatus !== currentStatus) {
+                            await this.updateInlineStatus(container, newStatus, episodes);
+                        }
+                        this.closeStatusDropdowns();
+                    });
+                });
+
+                // Close dropdown when clicking outside
+                setTimeout(() => {
+                    document.addEventListener('click', this._statusDropdownCloseHandler = (e) => {
+                        if (!e.target.closest('.status-dropdown') && !e.target.closest('.status-badge-clickable')) {
+                            this.closeStatusDropdowns();
+                        }
+                    });
+                }, 0);
+            });
+        });
+    }
+
+    // Close all status dropdowns
+    closeStatusDropdowns() {
+        document.querySelectorAll('.status-dropdown').forEach(dropdown => dropdown.remove());
+        if (this._statusDropdownCloseHandler) {
+            document.removeEventListener('click', this._statusDropdownCloseHandler);
+            this._statusDropdownCloseHandler = null;
+        }
+    }
+
+    // Update episode status inline
+    async updateInlineStatus(container, newStatus, episodes) {
+        const seriesName = container.dataset.episodeSeries;
+        const episodeId = container.dataset.episodeId;
+        const badge = container.querySelector('.status-badge-clickable');
+
+        if (!badge) return;
+
+        // Show loading state
+        badge.classList.add('status-updating');
+        const originalText = badge.textContent;
+
+        try {
+            const response = await fetch(`/api/episodes/${seriesName}/${episodeId}`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ content_status: newStatus })
+            });
+
+            const result = await response.json();
+
+            if (!response.ok || !result.success) {
+                throw new Error(result.error || 'Failed to update status');
+            }
+
+            // Update the badge
+            badge.textContent = newStatus;
+            badge.dataset.currentStatus = newStatus;
+            badge.className = `badge ${this.getStatusClass(newStatus)} status-badge-clickable`;
+
+            // Refresh the pipeline view to move card to new column
+            this.renderPipeline();
+
+        } catch (error) {
+            console.error('Error updating status:', error);
+            badge.textContent = originalText;
+            // Show error briefly
+            badge.style.outline = '2px solid var(--error)';
+            setTimeout(() => {
+                badge.style.outline = '';
+            }, 2000);
+        } finally {
+            badge.classList.remove('status-updating');
+        }
     }
 
     renderEpisodeCard(episode, releaseGroups = {}) {
@@ -335,6 +449,7 @@ class Dashboard {
         const series = episode.series;
         const workflow = metadata.workflow || {};
         const release = metadata.release || {};
+        const contentStatus = metadata.content_status || 'draft';
 
         // Determine thumbnail
         const thumbnailPath = metadata.thumbnail;
@@ -369,6 +484,13 @@ class Dashboard {
             ? `<div class="release-group-badge">${this.escapeHtml(releaseGroup.name || releaseGroupId)}</div>`
             : '';
 
+        // Inline status dropdown
+        const statusDropdownHTML = `
+            <div class="status-dropdown-container" data-episode-series="${this.escapeHtml(episode.series)}" data-episode-id="${this.escapeHtml(episode.episode)}">
+                <span class="badge ${this.getStatusClass(contentStatus)} status-badge-clickable" data-current-status="${contentStatus}">${contentStatus}</span>
+            </div>
+        `;
+
         return `
             <div class="episode-card" data-episode-path="${episode.path}">
                 <div class="episode-thumbnail ${hasThumbnail ? '' : 'placeholder'}" style="${thumbnailStyle}">
@@ -378,6 +500,7 @@ class Dashboard {
                     <div class="episode-title">${this.escapeHtml(title)}</div>
                     <div class="episode-meta">
                         <div class="series-badge ${seriesBadgeClass}">${this.escapeHtml(series)}</div>
+                        ${statusDropdownHTML}
                         <div class="workflow-indicators">
                             ${workflowIndicators}
                         </div>
@@ -405,13 +528,21 @@ class Dashboard {
         }
     }
 
-    async showEpisodeModal(episode, releaseGroups = {}) {
+    async showEpisodeModal(episode, releaseGroups = {}, startInEditMode = false) {
         const metadata = episode.metadata || {};
         const workflow = metadata.workflow || {};
         const release = metadata.release || {};
         const recording = metadata.recording || {};
         const series = metadata.series || {};
         const distribution = metadata.distribution || {};
+
+        // Store current episode data for editing
+        this._currentEditEpisode = {
+            series: episode.series,
+            episode: episode.episode,
+            path: episode.path,
+            metadata: JSON.parse(JSON.stringify(metadata)) // Deep clone
+        };
 
         // Fetch detailed episode data with file list
         let episodeDetails;
@@ -438,8 +569,8 @@ class Dashboard {
         const workflowHTML = workflowItems.map(item => {
             const checked = workflow[item.key] === true;
             return `
-                <div class="workflow-item">
-                    <div class="workflow-checkbox ${checked ? 'checked' : ''}"></div>
+                <div class="workflow-item workflow-item-interactive" data-workflow-key="${item.key}">
+                    <div class="workflow-checkbox ${checked ? 'checked' : ''}" data-workflow-key="${item.key}"></div>
                     <span>${item.label}</span>
                 </div>
             `;
@@ -476,17 +607,31 @@ class Dashboard {
                </div>`
             : '<p class="text-muted">No platforms configured</p>';
 
+        // Format tags for display and editing
+        const tagsArray = metadata.tags || [];
+        const tagsDisplay = tagsArray.filter(t => t && t.trim()).join(', ');
+
         const modalHTML = `
             <div class="modal-overlay" id="episode-modal">
                 <div class="modal">
                     <div class="modal-header">
-                        <div>
-                            <div class="modal-title">${this.escapeHtml(metadata.title || episode.episode)}</div>
+                        <div class="modal-header-content">
+                            <div class="modal-title-view">${this.escapeHtml(metadata.title || episode.episode)}</div>
+                            <input type="text" class="modal-title-edit edit-field hidden" id="edit-title" value="${this.escapeHtml(metadata.title || '')}" placeholder="Episode title">
                             <div class="modal-subtitle">${this.escapeHtml(episode.series)} / ${this.escapeHtml(episode.episode)}</div>
                         </div>
-                        <button class="modal-close" data-modal-close="episode-modal">×</button>
+                        <div class="modal-header-actions">
+                            <button class="btn btn-secondary" id="edit-mode-btn">Edit</button>
+                            <button class="btn btn-primary hidden" id="save-episode-btn">Save</button>
+                            <button class="btn btn-secondary hidden" id="cancel-edit-btn">Cancel</button>
+                            <button class="modal-close" data-modal-close="episode-modal">×</button>
+                        </div>
                     </div>
-                    <div class="modal-body">
+                    <div class="modal-body" id="episode-modal-body">
+                        <div class="edit-status-bar hidden" id="edit-status-bar">
+                            <span class="edit-status-icon">Editing</span>
+                            <span class="edit-status-message" id="edit-status-message"></span>
+                        </div>
                         <div class="modal-body-grid">
                             <div class="modal-main-content">
                                 <!-- Media Preview -->
@@ -498,7 +643,8 @@ class Dashboard {
                                 <!-- Description -->
                                 <div class="modal-section">
                                     <h3>Description</h3>
-                                    <p>${this.escapeHtml(metadata.description || 'No description available')}</p>
+                                    <p class="description-view">${this.escapeHtml(metadata.description || 'No description available')}</p>
+                                    <textarea class="description-edit edit-field hidden" id="edit-description" rows="6" placeholder="Episode description">${this.escapeHtml(metadata.description || '')}</textarea>
                                 </div>
 
                                 <!-- Metadata -->
@@ -507,13 +653,35 @@ class Dashboard {
                                     <div class="metadata-grid">
                                         <div class="metadata-item">
                                             <div class="metadata-label">Content Status</div>
-                                            <div class="metadata-value">
-                                                <span class="badge ${this.getStatusClass(metadata.content_status)}">${metadata.content_status || 'draft'}</span>
+                                            <div class="metadata-value metadata-value-view">
+                                                <span class="badge ${this.getStatusClass(metadata.content_status)}" id="status-badge">${metadata.content_status || 'draft'}</span>
+                                            </div>
+                                            <div class="metadata-value metadata-value-edit hidden">
+                                                <select class="edit-field" id="edit-content-status">
+                                                    <option value="draft" ${metadata.content_status === 'draft' ? 'selected' : ''}>Draft</option>
+                                                    <option value="ready" ${metadata.content_status === 'ready' ? 'selected' : ''}>Ready</option>
+                                                    <option value="staged" ${metadata.content_status === 'staged' ? 'selected' : ''}>Staged</option>
+                                                    <option value="released" ${metadata.content_status === 'released' ? 'selected' : ''}>Released</option>
+                                                </select>
                                             </div>
                                         </div>
                                         <div class="metadata-item">
                                             <div class="metadata-label">Series</div>
                                             <div class="metadata-value">${this.escapeHtml(series.name || episode.series)}</div>
+                                        </div>
+                                        <div class="metadata-item">
+                                            <div class="metadata-label">Target Release Date</div>
+                                            <div class="metadata-value metadata-value-view" id="target-date-view">${this.escapeHtml(release.target_date || 'Not set')}</div>
+                                            <div class="metadata-value metadata-value-edit hidden">
+                                                <input type="date" class="edit-field" id="edit-target-date" value="${release.target_date || ''}">
+                                            </div>
+                                        </div>
+                                        <div class="metadata-item">
+                                            <div class="metadata-label">Tags</div>
+                                            <div class="metadata-value metadata-value-view" id="tags-view">${this.escapeHtml(tagsDisplay) || 'No tags'}</div>
+                                            <div class="metadata-value metadata-value-edit hidden">
+                                                <input type="text" class="edit-field" id="edit-tags" value="${this.escapeHtml(tagsDisplay)}" placeholder="Comma-separated tags">
+                                            </div>
                                         </div>
                                         ${recording.date ? `
                                             <div class="metadata-item">
@@ -532,8 +700,8 @@ class Dashboard {
 
                                 <!-- Workflow Progress -->
                                 <div class="modal-section">
-                                    <h3>Workflow Progress</h3>
-                                    <div class="workflow-checklist">
+                                    <h3>Workflow Progress <span class="workflow-hint hidden" id="workflow-hint">(click to toggle)</span></h3>
+                                    <div class="workflow-checklist" id="workflow-checklist">
                                         ${workflowHTML}
                                     </div>
                                 </div>
@@ -593,6 +761,290 @@ class Dashboard {
         const closeBtn = document.querySelector('[data-modal-close="episode-modal"]');
         if (closeBtn) {
             closeBtn.addEventListener('click', () => this.closeModal('episode-modal'));
+        }
+
+        // Attach edit mode handlers
+        this.attachEditModeHandlers(episode, releaseGroups);
+
+        // If starting in edit mode, enable it
+        if (startInEditMode) {
+            this.toggleEditMode(true);
+        }
+    }
+
+    // Toggle edit mode in episode modal
+    toggleEditMode(enabled) {
+        const modal = document.getElementById('episode-modal');
+        if (!modal) return;
+
+        const editBtn = document.getElementById('edit-mode-btn');
+        const saveBtn = document.getElementById('save-episode-btn');
+        const cancelBtn = document.getElementById('cancel-edit-btn');
+        const statusBar = document.getElementById('edit-status-bar');
+        const workflowHint = document.getElementById('workflow-hint');
+
+        // Toggle button visibility
+        if (editBtn) editBtn.classList.toggle('hidden', enabled);
+        if (saveBtn) saveBtn.classList.toggle('hidden', !enabled);
+        if (cancelBtn) cancelBtn.classList.toggle('hidden', !enabled);
+        if (statusBar) statusBar.classList.toggle('hidden', !enabled);
+        if (workflowHint) workflowHint.classList.toggle('hidden', !enabled);
+
+        // Toggle view/edit fields
+        modal.querySelectorAll('.modal-title-view').forEach(el => el.classList.toggle('hidden', enabled));
+        modal.querySelectorAll('.modal-title-edit').forEach(el => el.classList.toggle('hidden', !enabled));
+        modal.querySelectorAll('.description-view').forEach(el => el.classList.toggle('hidden', enabled));
+        modal.querySelectorAll('.description-edit').forEach(el => el.classList.toggle('hidden', !enabled));
+        modal.querySelectorAll('.metadata-value-view').forEach(el => el.classList.toggle('hidden', enabled));
+        modal.querySelectorAll('.metadata-value-edit').forEach(el => el.classList.toggle('hidden', !enabled));
+
+        // Toggle workflow interactivity
+        const workflowChecklist = document.getElementById('workflow-checklist');
+        if (workflowChecklist) {
+            workflowChecklist.classList.toggle('workflow-editable', enabled);
+        }
+
+        // Store edit mode state
+        this._isEditMode = enabled;
+    }
+
+    // Attach edit mode button handlers
+    attachEditModeHandlers(episode, releaseGroups) {
+        const editBtn = document.getElementById('edit-mode-btn');
+        const saveBtn = document.getElementById('save-episode-btn');
+        const cancelBtn = document.getElementById('cancel-edit-btn');
+
+        if (editBtn) {
+            editBtn.addEventListener('click', () => {
+                this.toggleEditMode(true);
+            });
+        }
+
+        if (cancelBtn) {
+            cancelBtn.addEventListener('click', () => {
+                this.toggleEditMode(false);
+                // Reset form fields to original values
+                this.resetEditForm();
+            });
+        }
+
+        if (saveBtn) {
+            saveBtn.addEventListener('click', async () => {
+                await this.saveEpisodeChanges(episode, releaseGroups);
+            });
+        }
+
+        // Attach workflow checkbox click handlers
+        this.attachWorkflowCheckboxHandlers();
+    }
+
+    // Reset edit form to original values
+    resetEditForm() {
+        if (!this._currentEditEpisode) return;
+
+        const metadata = this._currentEditEpisode.metadata;
+        const release = metadata.release || {};
+        const tagsArray = metadata.tags || [];
+
+        const titleInput = document.getElementById('edit-title');
+        const descInput = document.getElementById('edit-description');
+        const statusSelect = document.getElementById('edit-content-status');
+        const targetDateInput = document.getElementById('edit-target-date');
+        const tagsInput = document.getElementById('edit-tags');
+
+        if (titleInput) titleInput.value = metadata.title || '';
+        if (descInput) descInput.value = metadata.description || '';
+        if (statusSelect) statusSelect.value = metadata.content_status || 'draft';
+        if (targetDateInput) targetDateInput.value = release.target_date || '';
+        if (tagsInput) tagsInput.value = tagsArray.filter(t => t && t.trim()).join(', ');
+
+        // Reset workflow checkboxes
+        const workflow = metadata.workflow || {};
+        document.querySelectorAll('.workflow-checkbox').forEach(checkbox => {
+            const key = checkbox.dataset.workflowKey;
+            if (key) {
+                checkbox.classList.toggle('checked', workflow[key] === true);
+            }
+        });
+    }
+
+    // Attach workflow checkbox click handlers
+    attachWorkflowCheckboxHandlers() {
+        document.querySelectorAll('.workflow-item-interactive').forEach(item => {
+            item.addEventListener('click', async () => {
+                if (!this._isEditMode) return;
+
+                const checkbox = item.querySelector('.workflow-checkbox');
+                if (!checkbox) return;
+
+                // Toggle the checked state
+                checkbox.classList.toggle('checked');
+            });
+        });
+    }
+
+    // Collect current edit form data
+    collectEditFormData() {
+        const data = {};
+
+        // Title
+        const titleInput = document.getElementById('edit-title');
+        if (titleInput && titleInput.value.trim()) {
+            data.title = titleInput.value.trim();
+        }
+
+        // Description
+        const descInput = document.getElementById('edit-description');
+        if (descInput) {
+            data.description = descInput.value.trim();
+        }
+
+        // Content status
+        const statusSelect = document.getElementById('edit-content-status');
+        if (statusSelect) {
+            data.content_status = statusSelect.value;
+        }
+
+        // Target date
+        const targetDateInput = document.getElementById('edit-target-date');
+        if (targetDateInput) {
+            data.release = {
+                target_date: targetDateInput.value || ''
+            };
+        }
+
+        // Tags
+        const tagsInput = document.getElementById('edit-tags');
+        if (tagsInput) {
+            const tagsStr = tagsInput.value.trim();
+            data.tags = tagsStr ? tagsStr.split(',').map(t => t.trim()).filter(t => t) : [];
+        }
+
+        // Workflow checkboxes
+        const workflow = {};
+        document.querySelectorAll('.workflow-checkbox').forEach(checkbox => {
+            const key = checkbox.dataset.workflowKey;
+            if (key) {
+                workflow[key] = checkbox.classList.contains('checked');
+            }
+        });
+        data.workflow = workflow;
+
+        return data;
+    }
+
+    // Save episode changes via PATCH API
+    async saveEpisodeChanges(episode, releaseGroups) {
+        const saveBtn = document.getElementById('save-episode-btn');
+        const statusMessage = document.getElementById('edit-status-message');
+
+        if (!this._currentEditEpisode) {
+            console.error('No episode data for saving');
+            return;
+        }
+
+        // Collect form data
+        const updates = this.collectEditFormData();
+
+        // Show loading state
+        if (saveBtn) {
+            saveBtn.disabled = true;
+            saveBtn.textContent = 'Saving...';
+        }
+        if (statusMessage) {
+            statusMessage.textContent = 'Saving changes...';
+        }
+
+        try {
+            const response = await fetch(`/api/episodes/${this._currentEditEpisode.series}/${this._currentEditEpisode.episode}`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(updates)
+            });
+
+            const result = await response.json();
+
+            if (!response.ok || !result.success) {
+                throw new Error(result.error || result.errors?.join(', ') || 'Failed to save changes');
+            }
+
+            // Update cached episode data
+            this._currentEditEpisode.metadata = result.metadata;
+
+            // Update view mode display
+            this.updateViewModeDisplay(result.metadata);
+
+            // Show success message
+            if (statusMessage) {
+                statusMessage.textContent = 'Changes saved successfully!';
+                statusMessage.classList.add('success');
+            }
+
+            // Exit edit mode after a brief delay
+            setTimeout(() => {
+                this.toggleEditMode(false);
+                if (statusMessage) {
+                    statusMessage.classList.remove('success');
+                }
+            }, 1500);
+
+            // Refresh the pipeline view if visible
+            if (this.currentView === 'pipeline') {
+                this.renderPipeline();
+            }
+
+        } catch (error) {
+            console.error('Error saving episode:', error);
+            if (statusMessage) {
+                statusMessage.textContent = `Error: ${error.message}`;
+                statusMessage.classList.add('error');
+                setTimeout(() => {
+                    statusMessage.classList.remove('error');
+                    statusMessage.textContent = '';
+                }, 3000);
+            }
+        } finally {
+            if (saveBtn) {
+                saveBtn.disabled = false;
+                saveBtn.textContent = 'Save';
+            }
+        }
+    }
+
+    // Update view mode display after save
+    updateViewModeDisplay(metadata) {
+        // Update title
+        const titleView = document.querySelector('.modal-title-view');
+        if (titleView) {
+            titleView.textContent = metadata.title || '';
+        }
+
+        // Update description
+        const descView = document.querySelector('.description-view');
+        if (descView) {
+            descView.textContent = metadata.description || 'No description available';
+        }
+
+        // Update status badge
+        const statusBadge = document.getElementById('status-badge');
+        if (statusBadge) {
+            statusBadge.textContent = metadata.content_status || 'draft';
+            statusBadge.className = `badge ${this.getStatusClass(metadata.content_status)}`;
+        }
+
+        // Update target date
+        const targetDateView = document.getElementById('target-date-view');
+        if (targetDateView) {
+            targetDateView.textContent = metadata.release?.target_date || 'Not set';
+        }
+
+        // Update tags
+        const tagsView = document.getElementById('tags-view');
+        if (tagsView) {
+            const tagsDisplay = (metadata.tags || []).filter(t => t && t.trim()).join(', ');
+            tagsView.textContent = tagsDisplay || 'No tags';
         }
     }
 

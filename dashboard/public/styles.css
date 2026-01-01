@@ -1849,3 +1849,291 @@ footer {
     white-space: pre-wrap;
     word-wrap: break-word;
 }
+
+/* Episode Edit Mode Styles */
+.hidden {
+    display: none !important;
+}
+
+/* Modal header layout for edit mode */
+.modal-header-content {
+    flex: 1;
+}
+
+.modal-header-actions {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+/* Button styles */
+.btn {
+    padding: 0.5rem 1rem;
+    border-radius: 4px;
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    border: 1px solid transparent;
+}
+
+.btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.btn-primary {
+    background-color: var(--primary-color);
+    color: white;
+    border-color: var(--primary-color);
+}
+
+.btn-primary:hover:not(:disabled) {
+    background-color: #1d4ed8;
+}
+
+.btn-secondary {
+    background-color: var(--surface);
+    color: var(--text-primary);
+    border-color: var(--border);
+}
+
+.btn-secondary:hover:not(:disabled) {
+    background-color: var(--surface-hover);
+    border-color: var(--primary-color);
+}
+
+/* Edit fields */
+.edit-field {
+    width: 100%;
+    background-color: var(--background);
+    border: 1px solid var(--border);
+    color: var(--text-primary);
+    padding: 0.5rem 0.75rem;
+    border-radius: 4px;
+    font-size: 0.875rem;
+    transition: all 0.2s;
+}
+
+.edit-field:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+.edit-field::placeholder {
+    color: var(--text-secondary);
+}
+
+/* Title edit field */
+.modal-title-edit {
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+}
+
+/* Description edit field */
+.description-edit {
+    min-height: 150px;
+    resize: vertical;
+    font-family: inherit;
+    line-height: 1.6;
+}
+
+/* Select styling */
+select.edit-field {
+    cursor: pointer;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2394a3b8' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.75rem center;
+    padding-right: 2rem;
+}
+
+/* Date input styling */
+input[type="date"].edit-field {
+    cursor: pointer;
+}
+
+input[type="date"].edit-field::-webkit-calendar-picker-indicator {
+    filter: invert(0.7);
+    cursor: pointer;
+}
+
+/* Edit status bar */
+.edit-status-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    background-color: rgba(37, 99, 235, 0.1);
+    border: 1px solid rgba(37, 99, 235, 0.2);
+    border-radius: 6px;
+    margin-bottom: 1.5rem;
+}
+
+.edit-status-icon {
+    background-color: var(--primary-color);
+    color: white;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.edit-status-message {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+}
+
+.edit-status-message.success {
+    color: var(--success);
+}
+
+.edit-status-message.error {
+    color: var(--error);
+}
+
+/* Workflow hint */
+.workflow-hint {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    font-weight: 400;
+    font-style: italic;
+}
+
+/* Editable workflow checklist */
+.workflow-editable .workflow-item-interactive {
+    cursor: pointer;
+    padding: 0.5rem;
+    margin: -0.5rem;
+    border-radius: 4px;
+    transition: background-color 0.2s;
+}
+
+.workflow-editable .workflow-item-interactive:hover {
+    background-color: var(--surface-hover);
+}
+
+.workflow-editable .workflow-checkbox {
+    border: 2px solid var(--border);
+    transition: all 0.2s;
+}
+
+.workflow-editable .workflow-checkbox:hover {
+    border-color: var(--primary-color);
+}
+
+.workflow-editable .workflow-checkbox.checked {
+    border-color: var(--success);
+}
+
+/* Inline status dropdown for Pipeline view */
+.status-dropdown-container {
+    position: relative;
+    display: inline-block;
+}
+
+.status-badge-clickable {
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.status-badge-clickable:hover {
+    transform: scale(1.05);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.status-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    z-index: 100;
+    background-color: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    min-width: 120px;
+    overflow: hidden;
+    animation: dropdownSlide 0.2s ease-out;
+}
+
+@keyframes dropdownSlide {
+    from {
+        opacity: 0;
+        transform: translateY(-8px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.status-dropdown-item {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.status-dropdown-item:hover {
+    background-color: var(--surface-hover);
+}
+
+.status-dropdown-item.active {
+    background-color: rgba(37, 99, 235, 0.2);
+}
+
+.status-dropdown-item .status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+}
+
+.status-dropdown-item .status-dot.draft {
+    background-color: var(--secondary-color);
+}
+
+.status-dropdown-item .status-dot.ready {
+    background-color: #3b82f6;
+}
+
+.status-dropdown-item .status-dot.staged {
+    background-color: var(--warning);
+}
+
+.status-dropdown-item .status-dot.released {
+    background-color: var(--success);
+}
+
+/* Loading spinner for inline status update */
+.status-updating {
+    position: relative;
+}
+
+.status-updating::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    right: -20px;
+    width: 12px;
+    height: 12px;
+    margin-top: -6px;
+    border: 2px solid var(--text-secondary);
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}

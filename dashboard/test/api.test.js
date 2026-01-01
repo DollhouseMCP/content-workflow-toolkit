@@ -138,6 +138,17 @@ describe('API Functional Tests', () => {
       }
     });
 
+    test('returns 400 when request body is missing', async () => {
+      const { status, data } = await apiRequest('/api/episodes', {
+        method: 'POST'
+        // No body sent
+      });
+
+      assert.strictEqual(status, 400);
+      assert.strictEqual(data.success, false);
+      assert.ok(data.error.includes('Invalid request body') || data.error.includes('Series'), 'error should mention invalid body or series');
+    });
+
     test('returns 400 when series is missing', async () => {
       const { status, data } = await apiRequest('/api/episodes', {
         method: 'POST',

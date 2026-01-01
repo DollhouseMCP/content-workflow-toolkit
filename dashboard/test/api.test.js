@@ -280,6 +280,170 @@ describe('API Functional Tests', () => {
     });
   });
 
+  describe('PATCH /api/episodes/:series/:episode', () => {
+    const patchTestSeries = 'patch-test-series';
+    let patchTestEpisode = null;
+
+    // Create a test episode before running PATCH tests
+    before(async () => {
+      const { status, data } = await apiRequest('/api/episodes', {
+        method: 'POST',
+        body: JSON.stringify({
+          series: patchTestSeries,
+          topic: 'patch-test',
+          title: 'PATCH Test Episode',
+          description: 'Episode for testing PATCH endpoint'
+        })
+      });
+
+      if (status === 201 && data.episode) {
+        patchTestEpisode = data.episode.episode;
+      }
+    });
+
+    after(async () => {
+      // Clean up test series
+      try {
+        await fs.rm(path.join(testSeriesDir, patchTestSeries), { recursive: true, force: true });
+      } catch (err) {
+        // Ignore cleanup errors
+      }
+    });
+
+    test('returns 404 for non-existent episode', async () => {
+      const { status, data } = await apiRequest('/api/episodes/nonexistent/nope', {
+        method: 'PATCH',
+        body: JSON.stringify({ content_status: 'ready' })
+      });
+
+      assert.strictEqual(status, 404);
+      assert.strictEqual(data.success, false);
+      assert.ok(data.error.includes('not found'), 'error should mention not found');
+    });
+
+    test('returns 400 for path traversal in series param', async () => {
+      // Use encoded dots to prevent URL normalization
+      const { status, data } = await apiRequest('/api/episodes/..%2Fetc/nope', {
+        method: 'PATCH',
+        body: JSON.stringify({ content_status: 'ready' })
+      });
+
+      assert.strictEqual(status, 400);
+      assert.strictEqual(data.success, false);
+    });
+
+    test('returns 400 for path traversal in episode param', async () => {
+      const { status, data } = await apiRequest('/api/episodes/test-series/..%2F..%2Fetc', {
+        method: 'PATCH',
+        body: JSON.stringify({ content_status: 'ready' })
+      });
+
+      assert.strictEqual(status, 400);
+      assert.strictEqual(data.success, false);
+    });
+
+    test('returns 400 for invalid content_status', async () => {
+      if (!patchTestEpisode) return;
+
+      const { status, data } = await apiRequest(`/api/episodes/${patchTestSeries}/${patchTestEpisode}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ content_status: 'invalid_status' })
+      });
+
+      assert.strictEqual(status, 400);
+      assert.strictEqual(data.success, false);
+      assert.ok(data.errors.some(e => e.includes('Content status')), 'should have content_status error');
+    });
+
+    test('returns 400 for title exceeding max length', async () => {
+      if (!patchTestEpisode) return;
+
+      const longTitle = 'a'.repeat(201);
+      const { status, data } = await apiRequest(`/api/episodes/${patchTestSeries}/${patchTestEpisode}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ title: longTitle })
+      });
+
+      assert.strictEqual(status, 400);
+      assert.strictEqual(data.success, false);
+      assert.ok(data.errors.some(e => e.includes('200')), 'should mention 200 char limit');
+    });
+
+    test('returns 400 for no valid fields to update', async () => {
+      if (!patchTestEpisode) return;
+
+      const { status, data } = await apiRequest(`/api/episodes/${patchTestSeries}/${patchTestEpisode}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ unknown_field: 'value' })
+      });
+
+      assert.strictEqual(status, 400);
+      assert.strictEqual(data.success, false);
+      // Should have some error indication
+      assert.ok(data.error || data.errors, 'should have error response');
+    });
+
+    test('updates content_status successfully', async () => {
+      if (!patchTestEpisode) return;
+
+      const { status, data } = await apiRequest(`/api/episodes/${patchTestSeries}/${patchTestEpisode}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ content_status: 'ready' })
+      });
+
+      assert.strictEqual(status, 200);
+      assert.strictEqual(data.success, true);
+      assert.ok(data.metadata, 'should return updated metadata');
+      assert.strictEqual(data.metadata.content_status, 'ready');
+    });
+
+    test('updates title successfully', async () => {
+      if (!patchTestEpisode) return;
+
+      const { status, data } = await apiRequest(`/api/episodes/${patchTestSeries}/${patchTestEpisode}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ title: 'Updated Title' })
+      });
+
+      assert.strictEqual(status, 200);
+      assert.strictEqual(data.success, true);
+      assert.strictEqual(data.metadata.title, 'Updated Title');
+    });
+
+    test('updates workflow fields successfully', async () => {
+      if (!patchTestEpisode) return;
+
+      const { status, data } = await apiRequest(`/api/episodes/${patchTestSeries}/${patchTestEpisode}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          workflow: {
+            scripted: true,
+            recorded: true
+          }
+        })
+      });
+
+      assert.strictEqual(status, 200);
+      assert.strictEqual(data.success, true);
+      assert.strictEqual(data.metadata.workflow.scripted, true);
+      assert.strictEqual(data.metadata.workflow.recorded, true);
+    });
+
+    test('sanitizes control characters from title', async () => {
+      if (!patchTestEpisode) return;
+
+      const { status, data } = await apiRequest(`/api/episodes/${patchTestSeries}/${patchTestEpisode}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ title: 'Title\x00With\x1FControl\x7FChars' })
+      });
+
+      assert.strictEqual(status, 200);
+      assert.strictEqual(data.success, true);
+      assert.ok(!data.metadata.title.includes('\x00'), 'should not contain null character');
+      assert.ok(!data.metadata.title.includes('\x1F'), 'should not contain control character');
+    });
+  });
+
   describe('Security Tests', () => {
     describe('Path Traversal Prevention', () => {
       test('rejects series name with ../', async () => {

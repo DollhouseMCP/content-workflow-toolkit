@@ -15,30 +15,31 @@
 </head>
 <body>
     <div id="app">
-        <header>
+        <a href="#content" class="skip-link">Skip to main content</a>
+        <header role="banner">
             <h1>Content Workflow Dashboard</h1>
             <div class="status-bar">
-                <span class="status-indicator" id="connection-status">
-                    <span class="dot"></span> Connected
+                <span class="status-indicator" id="connection-status" role="status" aria-live="polite">
+                    <span class="dot" aria-hidden="true"></span> Connected
                 </span>
             </div>
         </header>
 
-        <nav class="main-nav">
-            <button class="nav-btn active" data-view="pipeline">Pipeline</button>
-            <button class="nav-btn" data-view="episodes">Episodes</button>
-            <button class="nav-btn" data-view="calendar">Calendar</button>
-            <button class="nav-btn" data-view="releases">Release Queue</button>
-            <button class="nav-btn" data-view="assets">Assets</button>
-            <button class="nav-btn" data-view="distribution">Distribution</button>
+        <nav class="main-nav" role="navigation" aria-label="Main navigation">
+            <button class="nav-btn active" data-view="pipeline" aria-label="Pipeline view (Press 1)" aria-current="page">Pipeline</button>
+            <button class="nav-btn" data-view="episodes" aria-label="Episodes view (Press 2)">Episodes</button>
+            <button class="nav-btn" data-view="calendar" aria-label="Calendar view (Press 3)">Calendar</button>
+            <button class="nav-btn" data-view="releases" aria-label="Release Queue view (Press 4)">Release Queue</button>
+            <button class="nav-btn" data-view="assets" aria-label="Assets view (Press 5)">Assets</button>
+            <button class="nav-btn" data-view="distribution" aria-label="Distribution view (Press 6)">Distribution</button>
         </nav>
 
-        <main id="content">
-            <div class="loading">Loading...</div>
+        <main id="content" role="main" aria-live="polite">
+            <div class="loading" aria-label="Loading content">Loading...</div>
         </main>
 
-        <footer>
-            <p>Content Workflow Dashboard v1.0</p>
+        <footer role="contentinfo">
+            <p>Content Workflow Dashboard v1.0 - Press ? for keyboard shortcuts</p>
         </footer>
     </div>
 

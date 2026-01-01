@@ -150,6 +150,157 @@ class Dashboard {
                 this.switchView(view);
             });
         });
+
+        // Keyboard shortcuts
+        this.setupKeyboardShortcuts();
+    }
+
+    setupKeyboardShortcuts() {
+        document.addEventListener('keydown', (e) => {
+            // Don't trigger shortcuts when typing in inputs/textareas
+            const activeElement = document.activeElement;
+            const isTyping = activeElement && (
+                activeElement.tagName === 'INPUT' ||
+                activeElement.tagName === 'TEXTAREA' ||
+                activeElement.tagName === 'SELECT' ||
+                activeElement.isContentEditable
+            );
+
+            // Allow Escape even when typing
+            if (e.key === 'Escape') {
+                // Close any open modal
+                const openModal = document.querySelector('.modal-overlay');
+                if (openModal) {
+                    this.closeModal(openModal.id);
+                    return;
+                }
+                // Blur active element
+                if (activeElement) {
+                    activeElement.blur();
+                }
+                return;
+            }
+
+            // Skip other shortcuts when typing
+            if (isTyping) return;
+
+            // View switching: 1-6
+            const viewKeys = {
+                '1': 'pipeline',
+                '2': 'episodes',
+                '3': 'calendar',
+                '4': 'releases',
+                '5': 'assets',
+                '6': 'distribution'
+            };
+
+            if (viewKeys[e.key]) {
+                e.preventDefault();
+                this.switchView(viewKeys[e.key]);
+                return;
+            }
+
+            // New episode modal: n
+            if (e.key === 'n' && this.currentView === 'pipeline') {
+                e.preventDefault();
+                this.showNewEpisodeModal();
+                return;
+            }
+
+            // Focus search: /
+            if (e.key === '/') {
+                e.preventDefault();
+                const searchInput = document.getElementById('asset-search');
+                if (searchInput) {
+                    searchInput.focus();
+                }
+                return;
+            }
+
+            // Keyboard shortcuts help: ?
+            if (e.key === '?' || (e.shiftKey && e.key === '/')) {
+                e.preventDefault();
+                this.showKeyboardShortcutsModal();
+                return;
+            }
+
+            // Calendar navigation: left/right arrows
+            if (this.currentView === 'calendar' && this.calendarState) {
+                if (e.key === 'ArrowLeft') {
+                    e.preventDefault();
+                    this.calendarState.currentDate = new Date(
+                        this.calendarState.currentDate.getFullYear(),
+                        this.calendarState.currentDate.getMonth() - 1,
+                        1
+                    );
+                    this.renderCalendar();
+                    return;
+                }
+                if (e.key === 'ArrowRight') {
+                    e.preventDefault();
+                    this.calendarState.currentDate = new Date(
+                        this.calendarState.currentDate.getFullYear(),
+                        this.calendarState.currentDate.getMonth() + 1,
+                        1
+                    );
+                    this.renderCalendar();
+                    return;
+                }
+            }
+        });
+    }
+
+    showKeyboardShortcutsModal() {
+        const shortcuts = [
+            { key: '1-6', description: 'Switch views (Pipeline, Episodes, Calendar, Releases, Assets, Distribution)' },
+            { key: 'n', description: 'New episode (when in Pipeline view)' },
+            { key: '/', description: 'Focus search input' },
+            { key: 'Esc', description: 'Close modal / blur active element' },
+            { key: '?', description: 'Show this help dialog' },
+            { key: '<span class="key-arrow">&#8592;</span> / <span class="key-arrow">&#8594;</span>', description: 'Previous/next month (in Calendar view)' }
+        ];
+
+        const shortcutsHTML = shortcuts.map(s => `
+            <tr>
+                <td class="shortcut-key">${s.key}</td>
+                <td class="shortcut-description">${s.description}</td>
+            </tr>
+        `).join('');
+
+        const modalHTML = `
+            <div class="modal-overlay" id="keyboard-shortcuts-modal">
+                <div class="modal keyboard-shortcuts-modal" role="dialog" aria-labelledby="shortcuts-title" aria-modal="true">
+                    <div class="modal-header">
+                        <div>
+                            <h2 class="modal-title" id="shortcuts-title">Keyboard Shortcuts</h2>
+                            <div class="modal-subtitle">Navigate faster with your keyboard</div>
+                        </div>
+                        <button class="modal-close" data-modal-close="keyboard-shortcuts-modal" aria-label="Close keyboard shortcuts dialog">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <table class="shortcuts-table" role="grid">
+                            <thead>
+                                <tr>
+                                    <th scope="col">Key</th>
+                                    <th scope="col">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${shortcutsHTML}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        this.showModal('keyboard-shortcuts-modal', modalHTML);
+
+        // Attach close button handler
+        const closeBtn = document.querySelector('[data-modal-close="keyboard-shortcuts-modal"]');
+        if (closeBtn) {
+            closeBtn.addEventListener('click', () => this.closeModal('keyboard-shortcuts-modal'));
+        }
     }
 
     setupLiveReload() {
@@ -171,15 +322,39 @@ class Dashboard {
     }
 
     switchView(view) {
-        // Update active nav button
+        // Update active nav button and ARIA attributes
         document.querySelectorAll('.nav-btn').forEach(btn => {
             btn.classList.remove('active');
+            btn.removeAttribute('aria-current');
             if (btn.dataset.view === view) {
                 btn.classList.add('active');
+                btn.setAttribute('aria-current', 'page');
             }
         });
 
+        // Announce view change to screen readers
+        this.announceToScreenReader(`Switched to ${view} view`);
+
         this.loadView(view);
+    }
+
+    // Announce messages to screen readers via aria-live region
+    announceToScreenReader(message) {
+        let announcer = document.getElementById('sr-announcer');
+        if (!announcer) {
+            announcer = document.createElement('div');
+            announcer.id = 'sr-announcer';
+            announcer.setAttribute('role', 'status');
+            announcer.setAttribute('aria-live', 'polite');
+            announcer.setAttribute('aria-atomic', 'true');
+            announcer.className = 'sr-only';
+            document.body.appendChild(announcer);
+        }
+        // Clear and set message (needed to trigger announcement)
+        announcer.textContent = '';
+        setTimeout(() => {
+            announcer.textContent = message;
+        }, 100);
     }
 
     async loadView(view) {
@@ -1739,7 +1914,8 @@ class Dashboard {
 
                 <div class="asset-browser-controls">
                     <div class="search-box">
-                        <input type="text" class="search-input" id="asset-search" placeholder="Search files..." value="${this.escapeHtml(this.assetBrowserState.searchQuery)}">
+                        <label for="asset-search" class="sr-only">Search files</label>
+                        <input type="text" class="search-input" id="asset-search" placeholder="Search files... (Press /)" value="${this.escapeHtml(this.assetBrowserState.searchQuery)}" aria-label="Search files">
                     </div>
                     <div class="filter-group">
                         <label class="filter-label">Type:</label>
@@ -1774,19 +1950,19 @@ class Dashboard {
                 </div>
 
                 <div class="asset-browser-layout" id="asset-browser-layout">
-                    <div class="asset-tree-panel">
-                        <div class="asset-tree-header">
+                    <div class="asset-tree-panel" role="region" aria-label="File browser">
+                        <div class="asset-tree-header" id="asset-tree-label">
                             <span>Folder Structure</span>
                         </div>
-                        <div class="asset-tree" id="asset-tree">
+                        <div class="asset-tree" id="asset-tree" role="tree" aria-labelledby="asset-tree-label">
                             ${this.renderAssetTree(result.data)}
                         </div>
                     </div>
-                    <div class="asset-preview-panel">
+                    <div class="asset-preview-panel" role="region" aria-label="File preview">
                         <div class="asset-preview-header">
                             <span>Preview</span>
                         </div>
-                        <div id="asset-preview-content">
+                        <div id="asset-preview-content" aria-live="polite">
                             ${this.renderAssetPreview(this.assetBrowserState.selectedFile)}
                         </div>
                     </div>
@@ -1794,9 +1970,9 @@ class Dashboard {
             </div>
 
             <!-- Context Menu (hidden by default) -->
-            <div class="asset-context-menu" id="asset-context-menu" style="display: none;">
-                <div class="context-menu-item" data-action="rename">Rename</div>
-                <div class="context-menu-item" data-action="delete">Delete</div>
+            <div class="asset-context-menu" id="asset-context-menu" style="display: none;" role="menu" aria-label="File actions">
+                <div class="context-menu-item" data-action="rename" role="menuitem" tabindex="0">Rename</div>
+                <div class="context-menu-item" data-action="delete" role="menuitem" tabindex="0">Delete</div>
             </div>
         `;
 
@@ -1822,9 +1998,12 @@ class Dashboard {
                 <div class="asset-tree-item asset-tree-file ${isSelected ? 'selected' : ''}"
                      style="padding-left: ${(level + 1) * 1.5}rem;"
                      data-file-path="${this.escapeHtml(node.path)}"
-                     data-file-data='${JSON.stringify(node).replace(/'/g, "&#39;")}'>
+                     data-file-data='${JSON.stringify(node).replace(/'/g, "&#39;")}'
+                     role="treeitem"
+                     tabindex="0"
+                     aria-selected="${isSelected ? 'true' : 'false'}">
                     <div class="asset-tree-item-content">
-                        <span class="asset-file-icon">${this.getFileIcon(node)}</span>
+                        <span class="asset-file-icon" aria-hidden="true">${this.getFileIcon(node)}</span>
                         <span class="asset-tree-name">${this.escapeHtml(node.name)}</span>
                     </div>
                 </div>
@@ -1841,19 +2020,26 @@ class Dashboard {
             ? node.children.map(child => this.renderAssetTree(child, level + 1, currentPath)).join('')
             : '';
 
+        const folderId = `folder-${currentPath.replace(/[^a-zA-Z0-9]/g, '-')}`;
+
         return `
-            <div class="asset-tree-folder">
+            <div class="asset-tree-folder" role="group">
                 <div class="asset-tree-item asset-tree-directory ${isExpanded ? 'expanded' : ''}"
                      style="padding-left: ${level * 1.5}rem;"
-                     data-folder-path="${this.escapeHtml(currentPath)}">
+                     data-folder-path="${this.escapeHtml(currentPath)}"
+                     role="treeitem"
+                     tabindex="0"
+                     aria-expanded="${isExpanded ? 'true' : 'false'}"
+                     aria-controls="${folderId}"
+                     aria-label="${this.escapeHtml(node.name)} folder, ${node.fileCount || 0} items">
                     <div class="asset-tree-item-content">
-                        <span class="asset-folder-toggle">${isExpanded ? '▼' : '▶'}</span>
-                        <span class="asset-folder-icon">📁</span>
+                        <span class="asset-folder-toggle" aria-hidden="true">${isExpanded ? '▼' : '▶'}</span>
+                        <span class="asset-folder-icon" aria-hidden="true">📁</span>
                         <span class="asset-tree-name">${this.escapeHtml(node.name)}</span>
-                        <span class="asset-folder-count">${node.fileCount || 0}</span>
+                        <span class="asset-folder-count" aria-hidden="true">${node.fileCount || 0}</span>
                     </div>
                 </div>
-                <div class="asset-tree-children ${isExpanded ? 'expanded' : 'collapsed'}">
+                <div class="asset-tree-children ${isExpanded ? 'expanded' : 'collapsed'}" id="${folderId}" role="group">
                     ${childrenHTML}
                 </div>
             </div>

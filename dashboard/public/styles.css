@@ -5,6 +5,102 @@
     box-sizing: border-box;
 }
 
+/* ============================================
+   Accessibility Styles
+   ============================================ */
+
+/* Skip to main content link */
+.skip-link {
+    position: absolute;
+    top: -100px;
+    left: 0;
+    background-color: var(--primary-color);
+    color: white;
+    padding: 0.75rem 1.5rem;
+    z-index: 9999;
+    font-weight: 600;
+    text-decoration: none;
+    border-radius: 0 0 8px 0;
+    transition: top 0.2s;
+}
+
+.skip-link:focus {
+    top: 0;
+    outline: 3px solid var(--warning);
+    outline-offset: 2px;
+}
+
+/* Screen reader only (visually hidden but accessible) */
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+/* Focus Indicators - High visibility */
+:focus {
+    outline: none;
+}
+
+:focus-visible {
+    outline: 3px solid var(--primary-color);
+    outline-offset: 2px;
+}
+
+/* Navigation button focus */
+.nav-btn:focus-visible {
+    outline: 3px solid var(--primary-color);
+    outline-offset: -2px;
+    background-color: var(--surface-hover);
+}
+
+/* Button focus states */
+.btn:focus-visible,
+.toolbar-btn:focus-visible,
+.toggle-btn:focus-visible,
+.calendar-nav-btn:focus-visible {
+    outline: 3px solid var(--primary-color);
+    outline-offset: 2px;
+    box-shadow: 0 0 0 6px rgba(37, 99, 235, 0.2);
+}
+
+/* Form input focus */
+.form-input:focus-visible,
+.form-select:focus-visible,
+.form-textarea:focus-visible,
+.filter-select:focus-visible,
+.search-input:focus-visible,
+.edit-field:focus-visible {
+    outline: 3px solid var(--primary-color);
+    outline-offset: 0;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.15);
+}
+
+/* Card and interactive element focus */
+.card:focus-visible,
+.episode-card:focus-visible,
+.file-item:focus-visible,
+.list-item:focus-visible,
+.asset-tree-item:focus-visible,
+.calendar-day:focus-visible {
+    outline: 3px solid var(--primary-color);
+    outline-offset: 2px;
+}
+
+/* Modal close button focus */
+.modal-close:focus-visible {
+    outline: 3px solid var(--primary-color);
+    outline-offset: 2px;
+    background-color: var(--surface-hover);
+}
+
 :root {
     --primary-color: #2563eb;
     --secondary-color: #64748b;
@@ -2777,5 +2873,124 @@ input[type="date"].edit-field::-webkit-calendar-picker-indicator {
 
     .form-actions .btn {
         width: 100%;
+    }
+}
+
+/* ============================================
+   Keyboard Shortcuts Modal
+   ============================================ */
+
+.keyboard-shortcuts-modal {
+    max-width: 600px;
+}
+
+.shortcuts-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.shortcuts-table th,
+.shortcuts-table td {
+    padding: 0.75rem 1rem;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+}
+
+.shortcuts-table th {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-secondary);
+    background-color: var(--background);
+}
+
+.shortcuts-table tbody tr:hover {
+    background-color: var(--surface-hover);
+}
+
+.shortcut-key {
+    font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--primary-color);
+    white-space: nowrap;
+}
+
+.shortcut-key .key-arrow {
+    font-size: 1rem;
+}
+
+.shortcut-description {
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+}
+
+/* ============================================
+   Enhanced Badge Accessibility
+   ============================================ */
+
+/* Status badges with descriptive patterns for color-blind users */
+.badge.success {
+    background-color: rgba(16, 185, 129, 0.2);
+    color: var(--success);
+    border: 1px solid var(--success);
+}
+
+.badge.warning {
+    background-color: rgba(245, 158, 11, 0.2);
+    color: var(--warning);
+    border: 1px solid var(--warning);
+}
+
+.badge.error {
+    background-color: rgba(239, 68, 68, 0.2);
+    color: var(--error);
+    border: 1px solid var(--error);
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+    .badge.success {
+        background-color: var(--success);
+        color: white;
+    }
+
+    .badge.warning {
+        background-color: var(--warning);
+        color: black;
+    }
+
+    .badge.error {
+        background-color: var(--error);
+        color: white;
+    }
+
+    :focus-visible {
+        outline: 4px solid currentColor;
+        outline-offset: 3px;
+    }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+
+    .view {
+        animation: none;
+    }
+
+    .modal {
+        animation: none;
+    }
+
+    .notification {
+        animation: none;
     }
 }

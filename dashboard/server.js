@@ -1,12 +1,16 @@
-const express = require('express');
-const path = require('path');
-const chokidar = require('chokidar');
-const apiRoutes = require('./api');
+import express from 'express';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import chokidar from 'chokidar';
+import apiRoutes from './api/index.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Parse JSON request bodies
+// Parse JSON bodies
 app.use(express.json());
 
 // Serve static files from public directory

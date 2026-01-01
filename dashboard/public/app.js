@@ -20,6 +20,8 @@ class Dashboard {
     constructor() {
         this.currentView = 'episodes';
         this.data = {};
+        this.seriesList = [];
+        this.distributionProfiles = [];
         this.init();
     }
 
@@ -27,7 +29,32 @@ class Dashboard {
         this.setupMarkdown();
         this.setupEventListeners();
         this.setupLiveReload();
+        await this.loadInitialData();
         await this.loadView('pipeline');
+    }
+
+    async loadInitialData() {
+        // Pre-load series list and distribution profiles for the new episode modal
+        try {
+            const [seriesResult, distributionResult] = await Promise.all([
+                this.fetchAPI('/series').catch(() => ({ success: false, series: [] })),
+                this.fetchAPI('/distribution').catch(() => ({ success: false, data: { profiles: {} } }))
+            ]);
+
+            if (seriesResult.success) {
+                this.seriesList = seriesResult.series || [];
+            }
+
+            if (distributionResult.success && distributionResult.data.profiles) {
+                this.distributionProfiles = Object.entries(distributionResult.data.profiles).map(([id, profile]) => ({
+                    id,
+                    name: profile.name || id,
+                    description: profile.description || ''
+                }));
+            }
+        } catch (error) {
+            console.error('Error loading initial data:', error);
+        }
     }
 
     setupMarkdown() {
@@ -278,9 +305,14 @@ class Dashboard {
 
         content.innerHTML = `
             <div class="view">
-                <div class="section-header">
-                    <h2>Content Pipeline</h2>
-                    <p>Track content progress through your workflow</p>
+                <div class="section-header pipeline-header">
+                    <div class="section-header-text">
+                        <h2>Content Pipeline</h2>
+                        <p>Track content progress through your workflow</p>
+                    </div>
+                    <button class="btn btn-primary" id="new-episode-btn">
+                        <span class="btn-icon">+</span> New Episode
+                    </button>
                 </div>
 
                 <div class="pipeline-controls">
@@ -315,6 +347,11 @@ class Dashboard {
         document.getElementById('sort-filter').addEventListener('change', (e) => {
             this.pipelineState.sortBy = e.target.value;
             this.renderPipeline();
+        });
+
+        // New Episode button
+        document.getElementById('new-episode-btn').addEventListener('click', () => {
+            this.showNewEpisodeModal();
         });
 
         // Attach click listeners to episode cards
@@ -1046,6 +1083,312 @@ class Dashboard {
             const tagsDisplay = (metadata.tags || []).filter(t => t && t.trim()).join(', ');
             tagsView.textContent = tagsDisplay || 'No tags';
         }
+    }
+
+    showNewEpisodeModal() {
+        // Generate series options
+        const seriesOptions = this.seriesList.map(series =>
+            `<option value="${this.escapeHtml(series)}">${this.escapeHtml(series)}</option>`
+        ).join('');
+
+        // Generate distribution profile options
+        const profileOptions = this.distributionProfiles.map(profile =>
+            `<option value="${this.escapeHtml(profile.id)}" ${profile.id === 'full' ? 'selected' : ''}>${this.escapeHtml(profile.id)} - ${this.escapeHtml(profile.description)}</option>`
+        ).join('');
+
+        const modalHTML = `
+            <div class="modal-overlay" id="new-episode-modal">
+                <div class="modal new-episode-modal">
+                    <div class="modal-header">
+                        <div>
+                            <div class="modal-title">Create New Episode</div>
+                            <div class="modal-subtitle">Set up a new episode with metadata and folder structure</div>
+                        </div>
+                        <button class="modal-close" data-modal-close="new-episode-modal">×</button>
+                    </div>
+                    <div class="modal-body">
+                        <form id="new-episode-form" class="episode-form">
+                            <div class="form-group">
+                                <label for="episode-series" class="form-label">Series <span class="required">*</span></label>
+                                <div class="series-input-group">
+                                    <select id="episode-series-select" class="form-select">
+                                        <option value="">-- Select Series --</option>
+                                        ${seriesOptions}
+                                        <option value="__new__">+ Create New Series</option>
+                                    </select>
+                                    <input type="text" id="episode-series-new" class="form-input hidden" placeholder="Enter new series name">
+                                </div>
+                                <div class="form-error" id="series-error"></div>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="episode-topic" class="form-label">Topic / Slug <span class="required">*</span></label>
+                                <input type="text" id="episode-topic" class="form-input" placeholder="e.g., getting-started, api-overview">
+                                <div class="form-hint">Used in folder name. Lowercase, hyphens allowed, no spaces.</div>
+                                <div class="form-error" id="topic-error"></div>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="episode-title" class="form-label">Title <span class="required">*</span></label>
+                                <input type="text" id="episode-title" class="form-input" placeholder="Episode title for display">
+                                <div class="form-error" id="title-error"></div>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="episode-description" class="form-label">Description</label>
+                                <textarea id="episode-description" class="form-textarea" rows="4" placeholder="Brief description of the episode content..."></textarea>
+                            </div>
+
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="episode-target-date" class="form-label">Target Release Date</label>
+                                    <input type="date" id="episode-target-date" class="form-input">
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="episode-distribution" class="form-label">Distribution Profile</label>
+                                    <select id="episode-distribution" class="form-select">
+                                        ${profileOptions}
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="form-actions">
+                                <button type="button" class="btn btn-secondary" data-modal-close="new-episode-modal">Cancel</button>
+                                <button type="submit" class="btn btn-primary" id="create-episode-btn">
+                                    <span class="btn-text">Create Episode</span>
+                                    <span class="btn-loading hidden">Creating...</span>
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        this.showModal('new-episode-modal', modalHTML);
+
+        // Attach form event listeners
+        this.attachNewEpisodeFormListeners();
+    }
+
+    attachNewEpisodeFormListeners() {
+        const form = document.getElementById('new-episode-form');
+        const seriesSelect = document.getElementById('episode-series-select');
+        const seriesNewInput = document.getElementById('episode-series-new');
+        const topicInput = document.getElementById('episode-topic');
+
+        // Handle series select change (show/hide new series input)
+        seriesSelect.addEventListener('change', () => {
+            if (seriesSelect.value === '__new__') {
+                seriesNewInput.classList.remove('hidden');
+                seriesNewInput.focus();
+            } else {
+                seriesNewInput.classList.add('hidden');
+                seriesNewInput.value = '';
+            }
+        });
+
+        // Auto-slugify topic input
+        topicInput.addEventListener('input', () => {
+            const value = topicInput.value;
+            const slugified = this.slugify(value);
+            if (value !== slugified && value.toLowerCase() === value) {
+                // Only auto-correct if user is typing lowercase
+                topicInput.value = slugified;
+            }
+        });
+
+        // Handle form submission
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            await this.handleNewEpisodeSubmit();
+        });
+
+        // Close button handlers
+        document.querySelectorAll('[data-modal-close="new-episode-modal"]').forEach(btn => {
+            btn.addEventListener('click', () => this.closeModal('new-episode-modal'));
+        });
+    }
+
+    slugify(text) {
+        return text
+            .toString()
+            .toLowerCase()
+            .trim()
+            .replace(/\s+/g, '-')           // Replace spaces with -
+            .replace(/[^\w-]+/g, '')        // Remove non-word chars (except -)
+            .replace(/--+/g, '-')           // Replace multiple - with single -
+            .replace(/^-+/, '')             // Trim - from start
+            .replace(/-+$/, '');            // Trim - from end
+    }
+
+    validateSlug(slug) {
+        if (!slug || typeof slug !== 'string') return false;
+        if (slug.length < 1 || slug.length > 100) return false;
+        // Must be lowercase alphanumeric with hyphens and underscores
+        // Must match server-side VALID_SLUG_REGEX in api/index.js
+        const validSlugRegex = /^[a-z0-9][a-z0-9-_]*[a-z0-9]$|^[a-z0-9]$/;
+        return validSlugRegex.test(slug);
+    }
+
+    validateSeriesName(name) {
+        if (!name || typeof name !== 'string') return false;
+        if (name.length < 1 || name.length > 100) return false;
+        // Must not contain path traversal characters
+        if (name.includes('..') || name.includes('/') || name.includes('\\')) return false;
+        const validSeriesRegex = /^[a-zA-Z0-9][a-zA-Z0-9-_ ]*[a-zA-Z0-9]$|^[a-zA-Z0-9]$/;
+        return validSeriesRegex.test(name);
+    }
+
+    async handleNewEpisodeSubmit() {
+        // Clear previous errors
+        document.querySelectorAll('.form-error').forEach(el => el.textContent = '');
+        document.querySelectorAll('.form-input, .form-select, .form-textarea').forEach(el => el.classList.remove('error'));
+
+        // Get form values
+        const seriesSelect = document.getElementById('episode-series-select');
+        const seriesNewInput = document.getElementById('episode-series-new');
+        const topicInput = document.getElementById('episode-topic');
+        const titleInput = document.getElementById('episode-title');
+        const descriptionInput = document.getElementById('episode-description');
+        const targetDateInput = document.getElementById('episode-target-date');
+        const distributionSelect = document.getElementById('episode-distribution');
+        const submitBtn = document.getElementById('create-episode-btn');
+
+        // Determine series value
+        let series = seriesSelect.value === '__new__' ? seriesNewInput.value.trim() : seriesSelect.value;
+        const topic = this.slugify(topicInput.value.trim());
+        const title = titleInput.value.trim();
+        const description = descriptionInput.value.trim();
+        const targetDate = targetDateInput.value;
+        const distributionProfile = distributionSelect.value;
+
+        // Validate
+        let hasErrors = false;
+
+        if (!series) {
+            document.getElementById('series-error').textContent = 'Please select or enter a series name';
+            if (seriesSelect.value === '__new__') {
+                seriesNewInput.classList.add('error');
+            } else {
+                seriesSelect.classList.add('error');
+            }
+            hasErrors = true;
+        } else if (!this.validateSeriesName(series)) {
+            document.getElementById('series-error').textContent = 'Invalid series name. Use letters, numbers, spaces, hyphens, and underscores only.';
+            if (seriesSelect.value === '__new__') {
+                seriesNewInput.classList.add('error');
+            } else {
+                seriesSelect.classList.add('error');
+            }
+            hasErrors = true;
+        }
+
+        if (!topic) {
+            document.getElementById('topic-error').textContent = 'Topic/slug is required';
+            topicInput.classList.add('error');
+            hasErrors = true;
+        } else if (!this.validateSlug(topic)) {
+            document.getElementById('topic-error').textContent = 'Invalid slug. Use lowercase letters, numbers, and hyphens only.';
+            topicInput.classList.add('error');
+            hasErrors = true;
+        }
+
+        if (!title) {
+            document.getElementById('title-error').textContent = 'Title is required';
+            titleInput.classList.add('error');
+            hasErrors = true;
+        }
+
+        if (hasErrors) {
+            return;
+        }
+
+        // Show loading state
+        submitBtn.disabled = true;
+        submitBtn.querySelector('.btn-text').classList.add('hidden');
+        submitBtn.querySelector('.btn-loading').classList.remove('hidden');
+
+        try {
+            const response = await fetch('/api/episodes', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    series,
+                    topic,
+                    title,
+                    description,
+                    targetDate,
+                    distributionProfile
+                })
+            });
+
+            const result = await response.json();
+
+            if (!response.ok || !result.success) {
+                throw new Error(result.error || 'Failed to create episode');
+            }
+
+            // Success - close modal and refresh
+            this.closeModal('new-episode-modal');
+
+            // Show success message
+            this.showNotification(`Episode "${title}" created successfully!`, 'success');
+
+            // Update series list if a new series was created
+            if (!this.seriesList.includes(series)) {
+                this.seriesList.push(series);
+                this.seriesList.sort();
+            }
+
+            // Refresh the pipeline view
+            await this.renderPipeline();
+
+        } catch (error) {
+            console.error('Error creating episode:', error);
+            this.showNotification(error.message || 'Failed to create episode', 'error');
+        } finally {
+            // Reset button state
+            submitBtn.disabled = false;
+            submitBtn.querySelector('.btn-text').classList.remove('hidden');
+            submitBtn.querySelector('.btn-loading').classList.add('hidden');
+        }
+    }
+
+    showNotification(message, type = 'info') {
+        // Remove any existing notification
+        const existing = document.querySelector('.notification');
+        if (existing) {
+            existing.remove();
+        }
+
+        const notificationHTML = `
+            <div class="notification notification-${type}">
+                <span class="notification-message">${this.escapeHtml(message)}</span>
+                <button class="notification-close">×</button>
+            </div>
+        `;
+
+        document.body.insertAdjacentHTML('beforeend', notificationHTML);
+
+        const notification = document.querySelector('.notification');
+
+        // Close button handler
+        notification.querySelector('.notification-close').addEventListener('click', () => {
+            notification.classList.add('notification-hiding');
+            setTimeout(() => notification.remove(), 300);
+        });
+
+        // Auto-dismiss after 5 seconds
+        setTimeout(() => {
+            if (notification.parentNode) {
+                notification.classList.add('notification-hiding');
+                setTimeout(() => notification.remove(), 300);
+            }
+        }, 5000);
     }
 
     isMediaFile(ext) {

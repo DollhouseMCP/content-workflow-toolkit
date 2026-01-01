@@ -1,0 +1,77 @@
+services:
+  dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: content-workflow-dashboard
+    ports:
+      - "3000:3000"
+    volumes:
+      # Mount your content directories
+      - ./series:/app/series:rw
+      - ./assets:/app/assets:rw
+      # Mount config files for live updates
+      - ./release-queue.yml:/app/release-queue.yml:rw
+      - ./distribution-profiles.yml:/app/distribution-profiles.yml:ro
+      # Optional: mount templates for customization
+      - ./templates:/app/templates:ro
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+
+  # Development mode with hot reload
+  dashboard-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: content-workflow-dashboard-dev
+    ports:
+      - "3000:3000"
+    volumes:
+      # Mount everything for development
+      - ./dashboard:/app/dashboard:rw
+      - ./series:/app/series:rw
+      - ./assets:/app/assets:rw
+      - ./templates:/app/templates:rw
+      - ./release-queue.yml:/app/release-queue.yml:rw
+      - ./distribution-profiles.yml:/app/distribution-profiles.yml:rw
+      # Exclude node_modules (use container's)
+      - /app/dashboard/node_modules
+    environment:
+      - NODE_ENV=development
+      - PORT=3000
+    profiles:
+      - dev
+    command: npm run dev
+
+# Future services can be added here:
+#
+#  mcp-server:
+#    build:
+#      context: ./mcp-server
+#    ports:
+#      - "3001:3001"
+#    volumes:
+#      - ./series:/app/series:rw
+#      - ./assets:/app/assets:rw
+#    depends_on:
+#      - dashboard
+#
+#  transcription:
+#    build:
+#      context: ./services/transcription
+#    volumes:
+#      - ./series:/app/series:rw
+#    environment:
+#      - OPENAI_API_KEY=${OPENAI_API_KEY}
+
+networks:
+  default:
+    name: content-workflow-network

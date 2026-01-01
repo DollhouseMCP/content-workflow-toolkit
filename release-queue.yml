@@ -1,16 +1,69 @@
-# Release Queue - Content scheduled for release
-# This file tracks content status and release coordination
+# Release Queue
+# This file manages coordinated releases and staged content
 
-releases:
-  - id: getting-started-001
-    series: sample-series
-    episode: 2025-12-30-getting-started
+release_groups:
+  merview-launch:
+    name: "Merview Public Launch"
+    description: "Coordinated content for Merview going public"
+    status: staged
+    target_date: 2025-01-15T09:00:00-08:00
+    condition: "Merview repository made public"
+    items:
+      - path: series/merview/2024-12-20-intro
+        type: youtube
+        distribution: full
+      - path: series/merview/2024-12-21-getting-started
+        type: youtube
+        distribution: youtube-blog
+    dependencies:
+      - "merview repo public"
+      - "landing page live"
+    release_order:
+      - youtube
+      - blog
+      - linkedin
+      - bluesky
+      - mastodon
+
+  dollhouse-series:
+    name: "DollhouseMCP Series"
+    description: "Regular content series for DollhouseMCP"
+    status: staged
+    target_date: 2025-01-20T10:00:00-08:00
+    items:
+      - path: series/dollhouse-mcp/2024-12-15-overview
+        type: youtube
+        distribution: full
+    dependencies: []
+    release_order:
+      - youtube
+      - blog
+      - linkedin
+
+staged:
+  - path: series/mcp-aql/2024-12-18-tutorial
+    status: staged
+    target_date: 2025-01-10T14:00:00-08:00
+    distribution: youtube-blog
+    notes: "Standalone tutorial release"
+  - path: series/sample-series/2025-12-30-getting-started
     status: draft
     target_date: 2025-01-15
-    platforms:
-      - youtube
-      - twitter
-    dependencies: []
+    distribution: youtube-only
     notes: "Sample episode for testing the dashboard"
 
-# Status values: draft, ready, staged, released, archived
+blocked:
+  - path: series/ailish/2024-12-10-demo
+    status: blocked
+    blocked_by: "Waiting for API access approval"
+    blocked_since: 2024-12-15
+    notes: "Check back after holidays"
+
+released:
+  - path: series/dollhouse-mcp/2024-12-01-intro
+    status: released
+    release_date: 2024-12-05T09:00:00-08:00
+    distribution: full
+    notes: "Initial launch content"
+
+# Status values: draft, ready, staged, released, archived, blocked

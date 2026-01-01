@@ -37,6 +37,9 @@ const VALID_SERIES_REGEX = /^[a-zA-Z0-9][a-zA-Z0-9-_ ]*[a-zA-Z0-9]$|^[a-zA-Z0-9]
 // ============================================
 
 // Allowed file extensions (whitelist)
+// Note: SVG files can contain JavaScript. For public-facing applications,
+// either remove SVG from this list or sanitize SVG content before serving.
+// In this internal content workflow tool, SVGs are only accessible to authorized users.
 const ALLOWED_EXTENSIONS = new Set([
   // Images
   '.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg', '.bmp', '.ico',
@@ -1086,18 +1089,14 @@ router.post('/assets/upload', upload.array('files', 20), async (req, res) => {
     for (const file of req.files || []) {
       // Use sanitized original filename for final destination
       const sanitizedName = sanitizeFilename(file.originalname);
-      let finalName = sanitizedName;
-      let finalPath = path.join(targetDir, finalName);
+      const ext = path.extname(sanitizedName);
+      const baseName = path.basename(sanitizedName, ext);
 
-      // Handle filename conflicts by appending number
-      let counter = 1;
-      while (fsSync.existsSync(finalPath)) {
-        const ext = path.extname(sanitizedName);
-        const name = path.basename(sanitizedName, ext);
-        finalName = `${name}_${counter}${ext}`;
-        finalPath = path.join(targetDir, finalName);
-        counter++;
-      }
+      // Generate unique filename using timestamp + random suffix to avoid race conditions
+      // This is safer than checking file existence (TOCTOU vulnerability)
+      const uniqueSuffix = `${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
+      const finalName = `${baseName}-${uniqueSuffix}${ext}`;
+      const finalPath = path.join(targetDir, finalName);
 
       // Move file from temp uploads to target directory
       await fs.rename(file.path, finalPath);

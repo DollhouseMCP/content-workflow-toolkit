@@ -2385,7 +2385,7 @@ class Dashboard {
     // Create folder via API
     async createFolder(parentPath, folderName) {
         if (!folderName || !folderName.trim()) {
-            alert('Please enter a folder name');
+            console.error('Please enter a folder name'); return;
             return;
         }
 
@@ -2408,11 +2408,11 @@ class Dashboard {
                 this.assetBrowserState.expandedFolders.add(fullPath);
                 this.renderAssets();
             } else {
-                alert('Error: ' + result.error);
+                console.error('Error:', result.error);
             }
         } catch (error) {
             console.error('Create folder error:', error);
-            alert('Error creating folder: ' + error.message);
+            console.error('Error creating folder:', error.message);
         }
     }
 
@@ -2541,7 +2541,7 @@ class Dashboard {
     // Rename asset via API
     async renameAsset(currentPath, parentPath, newName) {
         if (!newName || !newName.trim()) {
-            alert('Please enter a new name');
+            console.error('Please enter a new name'); return;
             return;
         }
 
@@ -2563,11 +2563,11 @@ class Dashboard {
                 this.closeModal('rename-modal');
                 this.renderAssets();
             } else {
-                alert('Error: ' + result.error);
+                console.error('Error:', result.error);
             }
         } catch (error) {
             console.error('Rename error:', error);
-            alert('Error renaming: ' + error.message);
+            console.error('Error renaming:', error.message);
         }
     }
 
@@ -2634,11 +2634,11 @@ class Dashboard {
                 }
                 this.renderAssets();
             } else {
-                alert('Error: ' + result.error);
+                console.error('Error:', result.error);
             }
         } catch (error) {
             console.error('Delete error:', error);
-            alert('Error deleting: ' + error.message);
+            console.error('Error deleting:', error.message);
         }
     }
 

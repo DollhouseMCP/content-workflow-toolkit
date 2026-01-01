@@ -1,5 +1,137 @@
 // Content Workflow Dashboard - Frontend Application
 
+/**
+ * @fileoverview Frontend application for the Content Workflow Dashboard.
+ * Provides a visual interface for managing episodes, releases, assets, and distribution.
+ * @module dashboard/app
+ */
+
+/**
+ * Episode metadata from episode.yml files.
+ * @typedef {Object} EpisodeMetadata
+ * @property {string} [title] - Display title of the episode
+ * @property {string} [description] - Episode description
+ * @property {string} [content_status] - Current status: 'draft', 'ready', 'staged', 'released'
+ * @property {string} [thumbnail] - Filename of the thumbnail image
+ * @property {string[]} [tags] - Array of tags for categorization
+ * @property {Object} [workflow] - Workflow progress tracking
+ * @property {boolean} [workflow.scripted] - Whether script is complete
+ * @property {boolean} [workflow.recorded] - Whether recording is complete
+ * @property {boolean} [workflow.edited] - Whether editing is complete
+ * @property {boolean} [workflow.thumbnail_created] - Whether thumbnail is created
+ * @property {boolean} [workflow.uploaded] - Whether content is uploaded
+ * @property {boolean} [workflow.published] - Whether content is published
+ * @property {Object} [release] - Release scheduling information
+ * @property {string} [release.target_date] - Target release date (YYYY-MM-DD)
+ * @property {string} [release.release_group] - Associated release group ID
+ * @property {string[]} [release.depends_on] - Dependencies that must be released first
+ * @property {Object} [recording] - Recording metadata
+ * @property {string} [recording.date] - Recording date
+ * @property {string} [recording.duration_final] - Final duration
+ * @property {Object} [analytics] - Analytics data
+ * @property {string} [analytics.publish_date] - Actual publish date
+ * @property {Object} [distribution] - Distribution configuration
+ * @property {Object} [distribution.profiles] - Platform-specific distribution settings
+ * @property {Object} [series] - Series-level metadata
+ */
+
+/**
+ * Episode object returned from the API.
+ * @typedef {Object} Episode
+ * @property {string} path - Relative path to the episode directory (e.g., 'series-name/YYYY-MM-DD-slug')
+ * @property {string} series - Name of the series
+ * @property {string} episode - Episode identifier (folder name)
+ * @property {EpisodeMetadata} [metadata] - Parsed episode metadata from episode.yml
+ */
+
+/**
+ * Release calendar item representing a scheduled or released piece of content.
+ * @typedef {Object} ReleaseItem
+ * @property {'episode'|'release_group'|'staged'|'released'} type - Type of release item
+ * @property {'scheduled'|'released'} status - Current release status
+ * @property {Date} date - The scheduled or actual release date
+ * @property {string} title - Display title for the item
+ * @property {string} [series] - Series name (for episodes)
+ * @property {Episode} [episode] - Full episode object (for episode items)
+ * @property {string} [releaseGroup] - Associated release group ID
+ * @property {string} [contentStatus] - Content workflow status
+ * @property {string} [path] - File path (for staged/released items)
+ * @property {string} [groupId] - Release group ID (for release_group items)
+ * @property {Object} [group] - Release group configuration
+ * @property {number} [itemCount] - Number of items in a release group
+ */
+
+/**
+ * Asset node in the file tree structure.
+ * @typedef {Object} AssetNode
+ * @property {string} name - File or folder name
+ * @property {'file'|'directory'} type - Node type
+ * @property {string} path - Relative path from assets root
+ * @property {string} [ext] - File extension (for files)
+ * @property {number} [size] - File size in bytes (for files)
+ * @property {string} [modified] - Last modified date ISO string
+ * @property {number} [fileCount] - Number of files in directory (for directories)
+ * @property {AssetNode[]} [children] - Child nodes (for directories)
+ */
+
+/**
+ * File object representing a file in an episode directory.
+ * @typedef {Object} EpisodeFile
+ * @property {string} name - File name
+ * @property {'file'|'directory'} type - Node type
+ * @property {string} ext - File extension
+ * @property {number} size - File size in bytes
+ * @property {string} modified - Last modified date ISO string
+ */
+
+/**
+ * Distribution profile configuration.
+ * @typedef {Object} DistributionProfile
+ * @property {string} id - Profile identifier
+ * @property {string} name - Display name
+ * @property {string} [description] - Profile description
+ * @property {Object} [platforms] - Platform-specific settings
+ */
+
+/**
+ * Release group configuration from release-queue.yml.
+ * @typedef {Object} ReleaseGroup
+ * @property {string} [name] - Display name for the group
+ * @property {string} [description] - Group description
+ * @property {string} [status] - Group status
+ * @property {string} [target_date] - Target release date
+ * @property {Array<{path: string, distribution: string}>} [items] - Items in the group
+ * @property {string[]} [dependencies] - Required dependencies
+ */
+
+/**
+ * Asset browser state for managing folder expansion and selection.
+ * @typedef {Object} AssetBrowserState
+ * @property {Set<string>} expandedFolders - Set of expanded folder paths
+ * @property {AssetNode|null} selectedFile - Currently selected file
+ * @property {string} selectedFolder - Currently selected folder path
+ * @property {string} searchQuery - Current search filter text
+ * @property {'all'|'image'|'video'|'audio'|'document'} filterType - Current file type filter
+ * @property {boolean} isUploading - Whether an upload is in progress
+ * @property {number} uploadProgress - Upload progress percentage
+ * @property {Object|null} contextMenu - Context menu state
+ */
+
+/**
+ * Calendar view state for navigation and filtering.
+ * @typedef {Object} CalendarState
+ * @property {Date} currentDate - Currently displayed month/year
+ * @property {'calendar'|'list'} viewMode - Current view mode
+ * @property {'all'|'upcoming'|'released'} filter - Current filter setting
+ */
+
+/**
+ * Pipeline view state for filtering and sorting.
+ * @typedef {Object} PipelineState
+ * @property {string} filterSeries - Series filter ('all' or series name)
+ * @property {'created'|'target_release'} sortBy - Sort order
+ */
+
 // Configuration constants
 const DASHBOARD_CONFIG = {
     // Calendar display settings
@@ -26,7 +158,32 @@ const DASHBOARD_CONFIG = {
     ]
 };
 
+/**
+ * Main Dashboard application class.
+ * Manages the UI for the content workflow dashboard including views for
+ * pipeline, episodes, calendar, releases, assets, and distribution.
+ *
+ * @class Dashboard
+ * @example
+ * // Dashboard is automatically initialized on DOMContentLoaded
+ * document.addEventListener('DOMContentLoaded', () => {
+ *     new Dashboard();
+ * });
+ */
 class Dashboard {
+    /**
+     * Creates a new Dashboard instance and initializes the application.
+     * Sets up initial state, event listeners, and loads the default view.
+     *
+     * @constructor
+     * @property {string} currentView - The currently active view ('pipeline', 'episodes', 'calendar', 'releases', 'assets', 'distribution')
+     * @property {Object} data - Cached data from API responses
+     * @property {string[]} seriesList - List of available series names
+     * @property {DistributionProfile[]} distributionProfiles - Available distribution profiles
+     * @property {PipelineState} [pipelineState] - State for pipeline view filtering/sorting
+     * @property {CalendarState} [calendarState] - State for calendar view navigation
+     * @property {AssetBrowserState} [assetBrowserState] - State for asset browser
+     */
     constructor() {
         this.currentView = 'episodes';
         this.data = {};
@@ -35,6 +192,14 @@ class Dashboard {
         this.init();
     }
 
+    /**
+     * Initializes the dashboard application.
+     * Sets up markdown rendering, event listeners, live reload,
+     * loads initial data, and renders the default pipeline view.
+     *
+     * @async
+     * @returns {Promise<void>}
+     */
     async init() {
         this.setupMarkdown();
         this.setupEventListeners();
@@ -43,6 +208,13 @@ class Dashboard {
         await this.loadView('pipeline');
     }
 
+    /**
+     * Pre-loads series list and distribution profiles for the new episode modal.
+     * Called during initialization to ensure data is available before user interaction.
+     *
+     * @async
+     * @returns {Promise<void>}
+     */
     async loadInitialData() {
         // Pre-load series list and distribution profiles for the new episode modal
         try {
@@ -67,6 +239,12 @@ class Dashboard {
         }
     }
 
+    /**
+     * Initializes markdown and mermaid rendering libraries.
+     * Configures marked for GitHub Flavored Markdown and mermaid for diagram support.
+     *
+     * @returns {void}
+     */
     setupMarkdown() {
         // Initialize mermaid for diagram rendering
         try {
@@ -94,6 +272,14 @@ class Dashboard {
         }
     }
 
+    /**
+     * Renders markdown content to HTML with mermaid diagram support.
+     * Extracts mermaid code blocks and renders them as SVG diagrams after the main content.
+     *
+     * @async
+     * @param {string} content - Raw markdown content to render
+     * @returns {Promise<string>} Rendered HTML string
+     */
     async renderMarkdown(content) {
         if (typeof marked === 'undefined') {
             return `<pre>${this.escapeHtml(content)}</pre>`;
@@ -142,6 +328,12 @@ class Dashboard {
         return html;
     }
 
+    /**
+     * Sets up event listeners for navigation buttons.
+     * Attaches click handlers to nav buttons that trigger view switching.
+     *
+     * @returns {void}
+     */
     setupEventListeners() {
         // Navigation buttons
         document.querySelectorAll('.nav-btn').forEach(btn => {
@@ -152,6 +344,13 @@ class Dashboard {
         });
     }
 
+    /**
+     * Sets up Server-Sent Events (SSE) connection for live content reloading.
+     * Automatically refreshes the current view when content changes are detected.
+     *
+     * @returns {void}
+     * @fires Dashboard#reload - When content changes are detected
+     */
     setupLiveReload() {
         const eventSource = new EventSource('/api/events');
 
@@ -170,6 +369,13 @@ class Dashboard {
         };
     }
 
+    /**
+     * Switches to a different dashboard view.
+     * Updates the navigation button states and loads the new view.
+     *
+     * @param {string} view - View name to switch to ('pipeline', 'episodes', 'calendar', 'releases', 'assets', 'distribution')
+     * @returns {void}
+     */
     switchView(view) {
         // Update active nav button
         document.querySelectorAll('.nav-btn').forEach(btn => {
@@ -182,6 +388,15 @@ class Dashboard {
         this.loadView(view);
     }
 
+    /**
+     * Loads and renders a specific dashboard view.
+     * Shows a loading state while fetching data, then renders the appropriate view.
+     *
+     * @async
+     * @param {string} view - View name to load ('pipeline', 'episodes', 'calendar', 'releases', 'assets', 'distribution')
+     * @returns {Promise<void>}
+     * @throws {Error} Displays error message in UI if view fails to load
+     */
     async loadView(view) {
         this.currentView = view;
         const content = document.getElementById('content');
@@ -218,6 +433,14 @@ class Dashboard {
         }
     }
 
+    /**
+     * Makes an API request to the dashboard backend.
+     *
+     * @async
+     * @param {string} endpoint - API endpoint path (e.g., '/episodes', '/releases')
+     * @returns {Promise<Object>} Parsed JSON response from the API
+     * @throws {Error} If the API request fails or returns a non-OK status
+     */
     async fetchAPI(endpoint) {
         const response = await fetch(`/api${endpoint}`);
         if (!response.ok) {
@@ -226,6 +449,14 @@ class Dashboard {
         return await response.json();
     }
 
+    /**
+     * Renders the pipeline view as a Kanban board.
+     * Shows episodes organized by content status (draft, ready, staged, released)
+     * with filtering and sorting options.
+     *
+     * @async
+     * @returns {Promise<void>}
+     */
     async renderPipeline() {
         const result = await this.fetchAPI('/episodes');
         const releaseQueueResult = await this.fetchAPI('/releases');
@@ -383,7 +614,13 @@ class Dashboard {
         this.attachInlineStatusHandlers(episodes);
     }
 
-    // Attach inline status dropdown handlers
+    /**
+     * Attaches click handlers for inline status dropdowns on episode cards.
+     * Allows users to change episode status directly from the pipeline view.
+     *
+     * @param {Episode[]} episodes - Array of episodes to attach handlers for
+     * @returns {void}
+     */
     attachInlineStatusHandlers(episodes) {
         document.querySelectorAll('.status-badge-clickable').forEach(badge => {
             badge.addEventListener('click', (e) => {
@@ -441,7 +678,12 @@ class Dashboard {
         });
     }
 
-    // Close all status dropdowns
+    /**
+     * Closes all open status dropdown menus.
+     * Removes dropdown elements and cleans up document click handlers.
+     *
+     * @returns {void}
+     */
     closeStatusDropdowns() {
         document.querySelectorAll('.status-dropdown').forEach(dropdown => dropdown.remove());
         if (this._statusDropdownCloseHandler) {
@@ -450,7 +692,16 @@ class Dashboard {
         }
     }
 
-    // Update episode status inline
+    /**
+     * Updates an episode's status via the API from an inline dropdown.
+     * Shows loading state during update and refreshes the pipeline on success.
+     *
+     * @async
+     * @param {HTMLElement} container - The dropdown container element with episode data attributes
+     * @param {string} newStatus - New status value ('draft', 'ready', 'staged', 'released')
+     * @param {Episode[]} episodes - Array of episodes (unused, kept for compatibility)
+     * @returns {Promise<void>}
+     */
     async updateInlineStatus(container, newStatus, episodes) {
         const seriesName = container.dataset.episodeSeries;
         const episodeId = container.dataset.episodeId;
@@ -498,6 +749,13 @@ class Dashboard {
         }
     }
 
+    /**
+     * Renders an episode card for the pipeline Kanban board.
+     *
+     * @param {Episode} episode - Episode data to render
+     * @param {Object<string, ReleaseGroup>} [releaseGroups={}] - Map of release group IDs to group data
+     * @returns {string} HTML string for the episode card
+     */
     renderEpisodeCard(episode, releaseGroups = {}) {
         const metadata = episode.metadata || {};
         const title = metadata.title || episode.episode;
@@ -567,12 +825,24 @@ class Dashboard {
         `;
     }
 
+    /**
+     * Gets the CSS class for a series badge based on series name.
+     *
+     * @param {string} series - Series name
+     * @returns {string} CSS class name for the series badge
+     */
     getSeriesBadgeClass(series) {
         const normalized = series.toLowerCase().replace(/\s+/g, '-');
         const knownSeries = ['dollhouse-mcp', 'merview', 'mcp-aql', 'ailish'];
         return knownSeries.includes(normalized) ? normalized : 'default';
     }
 
+    /**
+     * Formats a date string for display.
+     *
+     * @param {string} dateString - ISO date string or YYYY-MM-DD format
+     * @returns {string} Formatted date string (e.g., 'Jan 15, 2025') or empty string
+     */
     formatDate(dateString) {
         if (!dateString) return '';
         try {
@@ -583,6 +853,16 @@ class Dashboard {
         }
     }
 
+    /**
+     * Displays a modal with detailed episode information.
+     * Shows metadata, workflow progress, files, and allows editing.
+     *
+     * @async
+     * @param {Episode} episode - Episode to display
+     * @param {Object<string, ReleaseGroup>} [releaseGroups={}] - Map of release group configurations
+     * @param {boolean} [startInEditMode=false] - Whether to start in edit mode
+     * @returns {Promise<void>}
+     */
     async showEpisodeModal(episode, releaseGroups = {}, startInEditMode = false) {
         const metadata = episode.metadata || {};
         const workflow = metadata.workflow || {};
@@ -827,7 +1107,13 @@ class Dashboard {
         }
     }
 
-    // Toggle edit mode in episode modal
+    /**
+     * Toggles edit mode in the episode modal.
+     * Shows/hides edit fields and updates button visibility.
+     *
+     * @param {boolean} enabled - Whether edit mode should be enabled
+     * @returns {void}
+     */
     toggleEditMode(enabled) {
         const modal = document.getElementById('episode-modal');
         if (!modal) return;
@@ -863,7 +1149,13 @@ class Dashboard {
         this._isEditMode = enabled;
     }
 
-    // Attach edit mode button handlers
+    /**
+     * Attaches event handlers for edit mode buttons in the episode modal.
+     *
+     * @param {Episode} episode - Episode being edited
+     * @param {Object<string, ReleaseGroup>} releaseGroups - Release group configurations
+     * @returns {void}
+     */
     attachEditModeHandlers(episode, releaseGroups) {
         const editBtn = document.getElementById('edit-mode-btn');
         const saveBtn = document.getElementById('save-episode-btn');
@@ -893,7 +1185,12 @@ class Dashboard {
         this.attachWorkflowCheckboxHandlers();
     }
 
-    // Reset edit form to original values
+    /**
+     * Resets the edit form to the original episode values.
+     * Called when canceling edit mode.
+     *
+     * @returns {void}
+     */
     resetEditForm() {
         if (!this._currentEditEpisode) return;
 
@@ -923,7 +1220,12 @@ class Dashboard {
         });
     }
 
-    // Attach workflow checkbox click handlers
+    /**
+     * Attaches click handlers to workflow checkbox items.
+     * Allows toggling workflow completion states in edit mode.
+     *
+     * @returns {void}
+     */
     attachWorkflowCheckboxHandlers() {
         document.querySelectorAll('.workflow-item-interactive').forEach(item => {
             item.addEventListener('click', async () => {
@@ -938,7 +1240,11 @@ class Dashboard {
         });
     }
 
-    // Collect current edit form data
+    /**
+     * Collects current values from the edit form fields.
+     *
+     * @returns {Object} Object containing form field values for API update
+     */
     collectEditFormData() {
         const data = {};
 
@@ -988,7 +1294,15 @@ class Dashboard {
         return data;
     }
 
-    // Save episode changes via PATCH API
+    /**
+     * Saves episode changes to the server via PATCH API.
+     * Collects form data, sends update request, and refreshes the view on success.
+     *
+     * @async
+     * @param {Episode} episode - Episode being edited
+     * @param {Object<string, ReleaseGroup>} releaseGroups - Release group configurations
+     * @returns {Promise<void>}
+     */
     async saveEpisodeChanges(episode, releaseGroups) {
         const saveBtn = document.getElementById('save-episode-btn');
         const statusMessage = document.getElementById('edit-status-message');
@@ -1068,7 +1382,13 @@ class Dashboard {
         }
     }
 
-    // Update view mode display after save
+    /**
+     * Updates the view mode display after saving episode changes.
+     * Refreshes displayed values without requiring a full modal reload.
+     *
+     * @param {EpisodeMetadata} metadata - Updated metadata from the server
+     * @returns {void}
+     */
     updateViewModeDisplay(metadata) {
         // Update title
         const titleView = document.querySelector('.modal-title-view');
@@ -1103,6 +1423,12 @@ class Dashboard {
         }
     }
 
+    /**
+     * Displays the modal for creating a new episode.
+     * Shows form with series selection, topic/slug, title, and optional fields.
+     *
+     * @returns {void}
+     */
     showNewEpisodeModal() {
         // Generate series options
         const seriesOptions = this.seriesList.map(series =>
@@ -1190,6 +1516,12 @@ class Dashboard {
         this.attachNewEpisodeFormListeners();
     }
 
+    /**
+     * Attaches event listeners for the new episode form.
+     * Handles series selection, topic slugification, and form submission.
+     *
+     * @returns {void}
+     */
     attachNewEpisodeFormListeners() {
         const form = document.getElementById('new-episode-form');
         const seriesSelect = document.getElementById('episode-series-select');
@@ -1229,6 +1561,12 @@ class Dashboard {
         });
     }
 
+    /**
+     * Converts text to a URL-safe slug format.
+     *
+     * @param {string} text - Text to convert
+     * @returns {string} Lowercase, hyphen-separated slug
+     */
     slugify(text) {
         return text
             .toString()
@@ -1241,6 +1579,12 @@ class Dashboard {
             .replace(/-+$/, '');            // Trim - from end
     }
 
+    /**
+     * Validates a slug string format.
+     *
+     * @param {string} slug - Slug to validate
+     * @returns {boolean} True if valid slug format
+     */
     validateSlug(slug) {
         if (!slug || typeof slug !== 'string') return false;
         if (slug.length < 1 || slug.length > 100) return false;
@@ -1250,6 +1594,12 @@ class Dashboard {
         return validSlugRegex.test(slug);
     }
 
+    /**
+     * Validates a series name format.
+     *
+     * @param {string} name - Series name to validate
+     * @returns {boolean} True if valid series name format
+     */
     validateSeriesName(name) {
         if (!name || typeof name !== 'string') return false;
         if (name.length < 1 || name.length > 100) return false;
@@ -1259,6 +1609,13 @@ class Dashboard {
         return validSeriesRegex.test(name);
     }
 
+    /**
+     * Handles submission of the new episode form.
+     * Validates input, creates episode via API, and refreshes the pipeline view.
+     *
+     * @async
+     * @returns {Promise<void>}
+     */
     async handleNewEpisodeSubmit() {
         // Clear previous errors
         document.querySelectorAll('.form-error').forEach(el => el.textContent = '');
@@ -1376,6 +1733,14 @@ class Dashboard {
         }
     }
 
+    /**
+     * Displays a notification toast message.
+     * Auto-dismisses after 5 seconds or can be closed manually.
+     *
+     * @param {string} message - Message to display
+     * @param {'info'|'success'|'error'} [type='info'] - Notification type for styling
+     * @returns {void}
+     */
     showNotification(message, type = 'info') {
         // Remove any existing notification
         const existing = document.querySelector('.notification');
@@ -1409,11 +1774,23 @@ class Dashboard {
         }, 5000);
     }
 
+    /**
+     * Checks if a file extension is a supported media type.
+     *
+     * @param {string} ext - File extension including dot (e.g., '.mp4')
+     * @returns {boolean} True if media file type
+     */
     isMediaFile(ext) {
         const mediaExtensions = ['.mp4', '.mov', '.webm', '.mp3', '.wav', '.m4a', '.png', '.jpg', '.jpeg', '.gif', '.webp'];
         return mediaExtensions.includes(ext);
     }
 
+    /**
+     * Gets an emoji icon for a file based on its type.
+     *
+     * @param {EpisodeFile|AssetNode} file - File object with ext and type properties
+     * @returns {string} Emoji representing the file type
+     */
     getFileIcon(file) {
         const ext = file.ext;
         if (file.type === 'directory') return '📁';
@@ -1425,6 +1802,12 @@ class Dashboard {
         return '📄';
     }
 
+    /**
+     * Formats a file size in bytes to a human-readable string.
+     *
+     * @param {number} bytes - File size in bytes
+     * @returns {string} Formatted size string (e.g., '1.5 MB')
+     */
     formatFileSize(bytes) {
         if (bytes === 0) return '0 Bytes';
         const k = DASHBOARD_CONFIG.FILE_SIZE_UNIT;
@@ -1433,6 +1816,12 @@ class Dashboard {
         return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
     }
 
+    /**
+     * Formats a date string for file display.
+     *
+     * @param {string} dateString - ISO date string
+     * @returns {string} Formatted date string (e.g., 'Jan 15, 2025')
+     */
     formatFileDate(dateString) {
         try {
             const date = new Date(dateString);
@@ -1442,6 +1831,14 @@ class Dashboard {
         }
     }
 
+    /**
+     * Renders the file browser component for an episode modal.
+     *
+     * @param {EpisodeFile[]} files - Array of files in the episode directory
+     * @param {string} episodePath - Relative path to the episode
+     * @param {EpisodeFile|null} activeFile - Currently selected file
+     * @returns {string} HTML string for the file browser
+     */
     renderFileBrowser(files, episodePath, activeFile) {
         if (!files || files.length === 0) {
             return '<div class="text-muted text-center" style="padding: 2rem;">No files found</div>';
@@ -1475,6 +1872,13 @@ class Dashboard {
         `;
     }
 
+    /**
+     * Renders the media preview component for an episode file.
+     *
+     * @param {EpisodeFile|null} file - File to preview
+     * @param {string} episodePath - Relative path to the episode
+     * @returns {string} HTML string for the media preview
+     */
     renderMediaPreview(file, episodePath) {
         if (!file || !this.isMediaFile(file.ext)) {
             return `
@@ -1510,6 +1914,14 @@ class Dashboard {
         `;
     }
 
+    /**
+     * Attaches click handlers to file items in the file browser.
+     * Updates the media preview when a media file is selected.
+     *
+     * @param {EpisodeFile[]} files - Array of files in the episode
+     * @param {string} episodePath - Relative path to the episode
+     * @returns {void}
+     */
     attachFileClickHandlers(files, episodePath) {
         document.querySelectorAll('.file-item').forEach(item => {
             item.addEventListener('click', () => {
@@ -1543,6 +1955,13 @@ class Dashboard {
         });
     }
 
+    /**
+     * Renders the episodes list view.
+     * Shows all episodes as cards with basic metadata.
+     *
+     * @async
+     * @returns {Promise<void>}
+     */
     async renderEpisodes() {
         const result = await this.fetchAPI('/episodes');
         const content = document.getElementById('content');
@@ -1596,6 +2015,13 @@ class Dashboard {
         `;
     }
 
+    /**
+     * Renders the releases queue view.
+     * Shows release groups, staged content, and blocked items.
+     *
+     * @async
+     * @returns {Promise<void>}
+     */
     async renderReleases() {
         const result = await this.fetchAPI('/releases');
         const content = document.getElementById('content');
@@ -1686,6 +2112,13 @@ class Dashboard {
         `;
     }
 
+    /**
+     * Renders the asset browser view.
+     * Shows file tree, preview panel, and upload functionality.
+     *
+     * @async
+     * @returns {Promise<void>}
+     */
     async renderAssets() {
         const result = await this.fetchAPI('/assets');
         const content = document.getElementById('content');
@@ -1805,6 +2238,14 @@ class Dashboard {
         this.attachAssetManagementListeners();
     }
 
+    /**
+     * Recursively renders the asset tree structure.
+     *
+     * @param {AssetNode} node - Tree node to render
+     * @param {number} [level=0] - Current nesting level
+     * @param {string} [parentPath=''] - Parent folder path
+     * @returns {string} HTML string for the tree node and children
+     */
     renderAssetTree(node, level = 0, parentPath = '') {
         const currentPath = parentPath ? `${parentPath}/${node.name}` : node.name;
         const isExpanded = this.assetBrowserState.expandedFolders.has(currentPath);
@@ -1860,6 +2301,12 @@ class Dashboard {
         `;
     }
 
+    /**
+     * Checks if a file matches the current search and type filters.
+     *
+     * @param {AssetNode} file - File node to check
+     * @returns {boolean} True if file matches current filters
+     */
     matchesAssetFilter(file) {
         const state = this.assetBrowserState;
 
@@ -1893,6 +2340,12 @@ class Dashboard {
         return true;
     }
 
+    /**
+     * Checks if a directory contains any files matching current filters.
+     *
+     * @param {AssetNode} node - Directory node to check
+     * @returns {boolean} True if contains matching files
+     */
     hasMatchingFiles(node) {
         if (node.type === 'file') {
             return this.matchesAssetFilter(node);
@@ -1905,6 +2358,12 @@ class Dashboard {
         return false;
     }
 
+    /**
+     * Renders the asset preview panel for a selected file.
+     *
+     * @param {AssetNode|null} file - File to preview, or null for placeholder
+     * @returns {string} HTML string for the preview panel
+     */
     renderAssetPreview(file) {
         if (!file) {
             return `
@@ -2036,6 +2495,12 @@ class Dashboard {
         `;
     }
 
+    /**
+     * Attaches event listeners for the asset browser.
+     * Uses event delegation for efficient handling of dynamic content.
+     *
+     * @returns {void}
+     */
     attachAssetBrowserListeners() {
         // Use event delegation on the content element to avoid memory leaks
         const content = document.getElementById('content');
@@ -2134,7 +2599,12 @@ class Dashboard {
         content.addEventListener('change', this._assetChangeHandler);
     }
 
-    // Asset Management Event Listeners
+    /**
+     * Attaches event listeners for asset management features.
+     * Handles upload, folder creation, drag-and-drop, and context menus.
+     *
+     * @returns {void}
+     */
     attachAssetManagementListeners() {
         const content = document.getElementById('content');
         if (!content) return;
@@ -2237,7 +2707,14 @@ class Dashboard {
         }
     }
 
-    // Upload files to the server
+    /**
+     * Uploads files to the server via the API.
+     * Shows progress indicator and refreshes the asset browser on completion.
+     *
+     * @async
+     * @param {FileList} files - Files to upload
+     * @returns {Promise<void>}
+     */
     async uploadFiles(files) {
         const targetFolder = this.assetBrowserState.selectedFolder || 'assets';
         // Remove the leading 'assets/' if present for the API call
@@ -2323,7 +2800,11 @@ class Dashboard {
         }
     }
 
-    // Show create folder modal
+    /**
+     * Displays the modal for creating a new folder in the asset browser.
+     *
+     * @returns {void}
+     */
     showCreateFolderModal() {
         const currentFolder = this.assetBrowserState.selectedFolder || 'assets';
         const parentPath = currentFolder.startsWith('assets/') ? currentFolder.substring(7) : (currentFolder === 'assets' ? '' : currentFolder);
@@ -2382,7 +2863,14 @@ class Dashboard {
         });
     }
 
-    // Create folder via API
+    /**
+     * Creates a new folder via the API.
+     *
+     * @async
+     * @param {string} parentPath - Parent folder path (relative to assets)
+     * @param {string} folderName - Name for the new folder
+     * @returns {Promise<void>}
+     */
     async createFolder(parentPath, folderName) {
         if (!folderName || !folderName.trim()) {
             console.error('Please enter a folder name'); return;
@@ -2416,7 +2904,13 @@ class Dashboard {
         }
     }
 
-    // Show context menu
+    /**
+     * Shows the context menu for an asset tree item.
+     *
+     * @param {MouseEvent} event - Right-click event
+     * @param {HTMLElement} targetElement - Target tree item element
+     * @returns {void}
+     */
     showContextMenu(event, targetElement) {
         const contextMenu = document.getElementById('asset-context-menu');
         if (!contextMenu) return;
@@ -2456,7 +2950,11 @@ class Dashboard {
         }
     }
 
-    // Hide context menu
+    /**
+     * Hides the asset context menu.
+     *
+     * @returns {void}
+     */
     hideContextMenu() {
         const contextMenu = document.getElementById('asset-context-menu');
         if (contextMenu) {
@@ -2465,7 +2963,12 @@ class Dashboard {
         this._contextMenuTarget = null;
     }
 
-    // Handle context menu actions
+    /**
+     * Handles a context menu action selection.
+     *
+     * @param {string} action - Action name ('rename' or 'delete')
+     * @returns {void}
+     */
     handleContextMenuAction(action) {
         const target = this._contextMenuTarget;
         if (!target) return;
@@ -2482,7 +2985,12 @@ class Dashboard {
         }
     }
 
-    // Show rename modal
+    /**
+     * Displays the modal for renaming an asset.
+     *
+     * @param {{type: string, path: string, element: HTMLElement}} target - Target asset info
+     * @returns {void}
+     */
     showRenameModal(target) {
         const currentName = target.path.split('/').pop();
         const parentPath = target.path.substring(0, target.path.lastIndexOf('/'));
@@ -2538,7 +3046,15 @@ class Dashboard {
         });
     }
 
-    // Rename asset via API
+    /**
+     * Renames an asset via the API.
+     *
+     * @async
+     * @param {string} currentPath - Current path of the asset
+     * @param {string} parentPath - Parent folder path
+     * @param {string} newName - New name for the asset
+     * @returns {Promise<void>}
+     */
     async renameAsset(currentPath, parentPath, newName) {
         if (!newName || !newName.trim()) {
             console.error('Please enter a new name'); return;
@@ -2571,7 +3087,12 @@ class Dashboard {
         }
     }
 
-    // Show delete confirmation modal
+    /**
+     * Displays the confirmation modal for deleting an asset.
+     *
+     * @param {{type: string, path: string, element: HTMLElement}} target - Target asset info
+     * @returns {void}
+     */
     showDeleteConfirmModal(target) {
         const isFolder = target.type === 'folder';
 
@@ -2614,7 +3135,13 @@ class Dashboard {
         });
     }
 
-    // Delete asset via API
+    /**
+     * Deletes an asset via the API.
+     *
+     * @async
+     * @param {string} assetPath - Path of the asset to delete
+     * @returns {Promise<void>}
+     */
     async deleteAsset(assetPath) {
         // Remove the 'assets/' prefix for API call
         const apiPath = assetPath.startsWith('assets/') ? assetPath.substring(7) : assetPath;
@@ -2642,6 +3169,13 @@ class Dashboard {
         }
     }
 
+    /**
+     * Renders the distribution profiles view.
+     * Shows configured distribution platforms and profiles.
+     *
+     * @async
+     * @returns {Promise<void>}
+     */
     async renderDistribution() {
         const result = await this.fetchAPI('/distribution');
         const content = document.getElementById('content');
@@ -2689,6 +3223,13 @@ class Dashboard {
         `;
     }
 
+    /**
+     * Renders the release calendar view.
+     * Shows scheduled and released content in calendar or list format.
+     *
+     * @async
+     * @returns {Promise<void>}
+     */
     async renderCalendar() {
         const content = document.getElementById('content');
 
@@ -2773,6 +3314,14 @@ class Dashboard {
         this.attachCalendarListeners();
     }
 
+    /**
+     * Collects release items from episodes and release queue data.
+     * Combines scheduled and actual release dates into a unified list.
+     *
+     * @param {Episode[]} episodes - Array of episodes
+     * @param {Object} releaseQueue - Release queue data with groups, staged, and released items
+     * @returns {ReleaseItem[]} Sorted array of release items
+     */
     collectReleaseItems(episodes, releaseQueue) {
         const items = [];
 
@@ -2887,6 +3436,13 @@ class Dashboard {
         return items.sort((a, b) => a.date - b.date);
     }
 
+    /**
+     * Filters release items based on the current filter setting.
+     *
+     * @param {ReleaseItem[]} items - Array of release items to filter
+     * @param {'all'|'upcoming'|'released'} filter - Filter type
+     * @returns {ReleaseItem[]} Filtered array of items
+     */
     filterReleaseItems(items, filter) {
         // Use start of today for "upcoming" comparison to include items scheduled for today
         const today = new Date();
@@ -2902,6 +3458,13 @@ class Dashboard {
         }
     }
 
+    /**
+     * Renders the calendar grid view for release items.
+     *
+     * @param {ReleaseItem[]} items - Release items to display
+     * @param {Object<string, ReleaseGroup>} releaseGroups - Release group configurations
+     * @returns {string} HTML string for the calendar grid
+     */
     renderCalendarView(items, releaseGroups) {
         // Reset calendar item cache for index-based lookups (XSS prevention)
         this._calendarItemCache = [];
@@ -3008,6 +3571,13 @@ class Dashboard {
         return calendarHTML;
     }
 
+    /**
+     * Renders the list view for release items.
+     *
+     * @param {ReleaseItem[]} items - Release items to display
+     * @param {Object<string, ReleaseGroup>} releaseGroups - Release group configurations
+     * @returns {string} HTML string for the list view
+     */
     renderListView(items, releaseGroups) {
         if (items.length === 0) {
             return '<div class="text-center text-muted" style="padding: 3rem;">No releases found</div>';
@@ -3090,13 +3660,25 @@ class Dashboard {
         return listHTML;
     }
 
+    /**
+     * Checks if two dates are the same calendar day.
+     *
+     * @param {Date} date1 - First date
+     * @param {Date} date2 - Second date
+     * @returns {boolean} True if same calendar day
+     */
     isSameDate(date1, date2) {
         return date1.getFullYear() === date2.getFullYear() &&
                date1.getMonth() === date2.getMonth() &&
                date1.getDate() === date2.getDate();
     }
 
-    // Get a date key in YYYY-MM-DD format using local timezone (not UTC)
+    /**
+     * Gets a date key in YYYY-MM-DD format using local timezone.
+     *
+     * @param {Date} date - Date to convert
+     * @returns {string} Date key string (YYYY-MM-DD)
+     */
     getLocalDateKey(date) {
         const year = date.getFullYear();
         const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -3104,13 +3686,25 @@ class Dashboard {
         return `${year}-${month}-${day}`;
     }
 
-    // Parse a date key as local date (not UTC)
+    /**
+     * Parses a YYYY-MM-DD date key as a local Date object.
+     *
+     * @param {string} dateKey - Date key string (YYYY-MM-DD)
+     * @returns {Date} Parsed date in local timezone
+     */
     parseLocalDateKey(dateKey) {
         const [year, month, day] = dateKey.split('-').map(Number);
         return new Date(year, month - 1, day);
     }
 
-    // Show modal with proper cleanup and keyboard support
+    /**
+     * Shows a modal with proper cleanup and keyboard support.
+     * Handles overlay clicks, escape key, and manages modal state.
+     *
+     * @param {string} modalId - Unique ID for the modal element
+     * @param {string} modalHTML - HTML content for the modal
+     * @returns {void}
+     */
     showModal(modalId, modalHTML) {
         // Remove any existing modal with same ID
         const existingModal = document.getElementById(modalId);
@@ -3148,7 +3742,13 @@ class Dashboard {
         modal._clickHandler = clickHandler;
     }
 
-    // Close and cleanup modal
+    /**
+     * Closes and cleans up a modal.
+     * Removes event listeners and DOM elements.
+     *
+     * @param {string} modalId - ID of the modal to close
+     * @returns {void}
+     */
     closeModal(modalId) {
         const modal = document.getElementById(modalId);
         if (modal) {
@@ -3169,7 +3769,13 @@ class Dashboard {
         }
     }
 
-    // Create a safe serializable version of a release item (avoids circular references)
+    /**
+     * Creates a safe serializable version of a release item.
+     * Avoids circular references for JSON stringification.
+     *
+     * @param {ReleaseItem} item - Release item to serialize
+     * @returns {Object} Serializable object with essential properties
+     */
     serializeReleaseItem(item) {
         const safeItem = {
             type: item.type,
@@ -3213,6 +3819,12 @@ class Dashboard {
         return safeItem;
     }
 
+    /**
+     * Attaches event listeners for the calendar view.
+     * Handles view toggle, month navigation, and item clicks.
+     *
+     * @returns {void}
+     */
     attachCalendarListeners() {
         // Use event delegation on the content element to avoid memory leaks
         const content = document.getElementById('content');
@@ -3293,6 +3905,13 @@ class Dashboard {
         content.addEventListener('change', this._calendarChangeHandler);
     }
 
+    /**
+     * Shows a modal with all release items for a specific day.
+     *
+     * @async
+     * @param {string} dateKey - Date key (YYYY-MM-DD) for the day to display
+     * @returns {Promise<void>}
+     */
     async showDayModal(dateKey) {
         // Use cached release items if available (from renderCalendar)
         let releaseItems = this._cachedReleaseItems;
@@ -3371,6 +3990,12 @@ class Dashboard {
         }
     }
 
+    /**
+     * Shows a modal with detailed information for a release item.
+     *
+     * @param {ReleaseItem} item - Release item to display
+     * @returns {void}
+     */
     showReleaseItemModal(item) {
         let detailsHTML = '';
 
@@ -3494,6 +4119,12 @@ class Dashboard {
         }
     }
 
+    /**
+     * Gets the CSS badge class for a status value.
+     *
+     * @param {string} status - Status value (e.g., 'draft', 'ready', 'released')
+     * @returns {string} CSS class name ('warning', 'success', or 'error')
+     */
     getStatusClass(status) {
         const statusMap = {
             'planning': 'warning',
@@ -3510,6 +4141,12 @@ class Dashboard {
         return statusMap[status] || 'warning';
     }
 
+    /**
+     * Escapes HTML special characters to prevent XSS attacks.
+     *
+     * @param {string} text - Text to escape
+     * @returns {string} HTML-safe escaped string
+     */
     escapeHtml(text) {
         if (!text) return '';
         const div = document.createElement('div');

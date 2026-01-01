@@ -1353,23 +1353,31 @@ router.patch('/assets/*', async (req, res) => {
       });
     }
 
-    // Check if destination already exists
-    try {
-      await fs.access(fullNewPath);
-      return res.status(400).json({
-        success: false,
-        error: 'Destination already exists'
-      });
-    } catch {
-      // Destination doesn't exist, which is what we want
-    }
-
     // Ensure parent directory of destination exists
     const newParentDir = path.dirname(fullNewPath);
     await fs.mkdir(newParentDir, { recursive: true });
 
-    // Perform the rename/move
-    await fs.rename(fullCurrentPath, fullNewPath);
+    // Perform the rename/move atomically - handles EEXIST on Windows
+    // Note: On POSIX systems, rename overwrites existing files by design
+    try {
+      // Check destination exists just before rename to minimize race window
+      const destStats = await fs.stat(fullNewPath).catch(() => null);
+      if (destStats) {
+        return res.status(400).json({
+          success: false,
+          error: 'Destination already exists'
+        });
+      }
+      await fs.rename(fullCurrentPath, fullNewPath);
+    } catch (renameError) {
+      if (renameError.code === 'EEXIST') {
+        return res.status(400).json({
+          success: false,
+          error: 'Destination already exists'
+        });
+      }
+      throw renameError;
+    }
 
     res.json({
       success: true,

@@ -774,8 +774,9 @@ class Dashboard {
     validateSlug(slug) {
         if (!slug || typeof slug !== 'string') return false;
         if (slug.length < 1 || slug.length > 100) return false;
-        // Must be lowercase alphanumeric with hyphens
-        const validSlugRegex = /^[a-z0-9][a-z0-9-]*[a-z0-9]$|^[a-z0-9]$/;
+        // Must be lowercase alphanumeric with hyphens and underscores
+        // Must match server-side VALID_SLUG_REGEX in api/index.js
+        const validSlugRegex = /^[a-z0-9][a-z0-9-_]*[a-z0-9]$|^[a-z0-9]$/;
         return validSlugRegex.test(slug);
     }
 

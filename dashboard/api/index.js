@@ -368,6 +368,44 @@ router.post('/episodes', async (req, res) => {
       ? description.replace(/<[^>]*>/g, '').trim()
       : '';
 
+    // Validate targetDate format if provided (YYYY-MM-DD)
+    if (targetDate) {
+      const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+      if (!dateRegex.test(targetDate)) {
+        return res.status(400).json({
+          success: false,
+          error: 'Invalid target date format. Use YYYY-MM-DD.'
+        });
+      }
+      // Validate it's a real date
+      const parsedDate = new Date(targetDate + 'T00:00:00');
+      if (isNaN(parsedDate.getTime())) {
+        return res.status(400).json({
+          success: false,
+          error: 'Invalid target date.'
+        });
+      }
+    }
+
+    // Validate distribution profile if provided
+    if (distributionProfile) {
+      try {
+        const profilesPath = path.join(__dirname, '..', '..', 'distribution-profiles.yml');
+        const profilesContent = await fs.readFile(profilesPath, 'utf8');
+        const profiles = yaml.load(profilesContent);
+        const validProfiles = Object.keys(profiles.profiles || {});
+        if (!validProfiles.includes(distributionProfile)) {
+          return res.status(400).json({
+            success: false,
+            error: `Invalid distribution profile. Valid options: ${validProfiles.join(', ')}`
+          });
+        }
+      } catch (err) {
+        // If profiles file doesn't exist, accept any profile name
+        console.warn('Could not validate distribution profile:', err.message);
+      }
+    }
+
     // Create paths
     const date = getCurrentDate();
     const episodeFolderName = `${date}-${slug}`;
@@ -385,100 +423,87 @@ router.post('/episodes', async (req, res) => {
       });
     }
 
-    // Check if episode already exists
-    try {
-      await fs.access(episodePath);
-      return res.status(409).json({
-        success: false,
-        error: `Episode folder already exists: ${episodeFolderName}`
-      });
-    } catch (err) {
-      // Episode doesn't exist, which is what we want
-    }
-
     // Create series folder if it doesn't exist
-    try {
-      await fs.access(seriesPath);
-    } catch (err) {
-      await fs.mkdir(seriesPath, { recursive: true });
-    }
+    await fs.mkdir(seriesPath, { recursive: true });
 
-    // Create episode folder structure
-    await fs.mkdir(episodePath, { recursive: true });
+    // Create episode folder - use recursive:false to detect if it already exists
+    // This avoids TOCTOU race condition between check and creation
+    try {
+      await fs.mkdir(episodePath, { recursive: false });
+    } catch (err) {
+      if (err.code === 'EEXIST') {
+        return res.status(409).json({
+          success: false,
+          error: `Episode folder already exists: ${episodeFolderName}`
+        });
+      }
+      throw err; // Re-throw other errors
+    }
     await fs.mkdir(path.join(episodePath, 'raw', 'camera'), { recursive: true });
     await fs.mkdir(path.join(episodePath, 'raw', 'screen'), { recursive: true });
     await fs.mkdir(path.join(episodePath, 'audio'), { recursive: true });
     await fs.mkdir(path.join(episodePath, 'assets'), { recursive: true });
     await fs.mkdir(path.join(episodePath, 'exports'), { recursive: true });
 
-    // Read and populate metadata template
+    // Read and populate metadata template using proper YAML parsing
     const metadataTemplatePath = path.join(TEMPLATES_DIR, 'metadata-template.yml');
-    let metadataContent;
+    let metadata;
     try {
-      metadataContent = await fs.readFile(metadataTemplatePath, 'utf8');
+      const templateContent = await fs.readFile(metadataTemplatePath, 'utf8');
+      metadata = yaml.load(templateContent) || {};
     } catch (err) {
-      // If template doesn't exist, create basic metadata
-      metadataContent = `# Episode Metadata
-content_status: draft
-
-title: ""
-description: ""
-
-distribution:
-  profile: full
-
-release:
-  target_date: ""
-  release_group: ""
-  depends_on: []
-  notes: ""
-
-recording:
-  date: ""
-  duration_raw: ""
-  duration_final: ""
-  format: "4K"
-
-series:
-  name: ""
-  episode_number:
-
-workflow:
-  scripted: false
-  recorded: false
-  edited: false
-  thumbnail_created: false
-  uploaded: false
-  published: false
-
-analytics:
-  youtube_id: ""
-  publish_date: ""
-`;
+      // If template doesn't exist, create basic metadata structure
+      metadata = {
+        content_status: 'draft',
+        title: '',
+        description: '',
+        distribution: { profile: 'full' },
+        release: { target_date: '', release_group: '', depends_on: [], notes: '' },
+        recording: { date: '', duration_raw: '', duration_final: '', format: '4K' },
+        series: { name: '', episode_number: null },
+        workflow: {
+          scripted: false,
+          recorded: false,
+          edited: false,
+          thumbnail_created: false,
+          uploaded: false,
+          published: false
+        },
+        analytics: { youtube_id: '', publish_date: '' }
+      };
     }
 
-    // Update metadata with provided values
-    metadataContent = metadataContent.replace(/title: ""/, `title: "${sanitizedTitle.replace(/"/g, '\\"')}"`);
-    metadataContent = metadataContent.replace(/name: ""/, `name: "${seriesName.replace(/"/g, '\\"')}"`);
-    metadataContent = metadataContent.replace(/date: ""/, `date: "${date}"`);
+    // Update metadata with provided values (safe object mutation)
+    metadata.title = sanitizedTitle;
+    metadata.content_status = 'draft';
 
     if (sanitizedDescription) {
-      // For multi-line description, use YAML block scalar
-      const descLines = sanitizedDescription.split('\n').map(line => '  ' + line).join('\n');
-      metadataContent = metadataContent.replace(
-        /description: \|[\s\S]*?(?=\n\n|\ntags:|\n#)/,
-        `description: |\n${descLines}\n\n`
-      );
+      metadata.description = sanitizedDescription;
     }
 
+    // Ensure nested objects exist
+    metadata.series = metadata.series || {};
+    metadata.series.name = seriesName;
+
+    metadata.recording = metadata.recording || {};
+    metadata.recording.date = date;
+
     if (targetDate) {
-      metadataContent = metadataContent.replace(/target_date: ""/, `target_date: "${targetDate}"`);
+      metadata.release = metadata.release || {};
+      metadata.release.target_date = targetDate;
     }
 
     if (distributionProfile) {
-      metadataContent = metadataContent.replace(/profile: full/, `profile: ${distributionProfile}`);
+      metadata.distribution = metadata.distribution || {};
+      metadata.distribution.profile = distributionProfile;
     }
 
+    // Write metadata using YAML dump for proper formatting
+    const metadataContent = '# Episode Metadata\n' + yaml.dump(metadata, {
+      lineWidth: -1,  // Don't wrap lines
+      quotingType: '"',
+      forceQuotes: false
+    });
     await fs.writeFile(path.join(episodePath, 'metadata.yml'), metadataContent, 'utf8');
 
     // Copy script template

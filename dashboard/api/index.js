@@ -5,7 +5,7 @@ const yaml = require('js-yaml');
 
 const router = express.Router();
 
-// Base paths
+// Base paths (resolved once at module load for security and performance)
 const BASE_DIR = path.join(__dirname, '../..');
 const SERIES_DIR = path.join(BASE_DIR, 'series');
 const ASSETS_DIR = path.join(BASE_DIR, 'assets');
@@ -13,14 +13,66 @@ const TEMPLATES_DIR = path.join(BASE_DIR, 'templates');
 const RELEASE_QUEUE = path.join(BASE_DIR, 'release-queue.yml');
 const DISTRIBUTION_PROFILES = path.join(BASE_DIR, 'distribution-profiles.yml');
 
+// Pre-resolved paths for path traversal checks (resolved once at startup)
+const RESOLVED_SERIES_DIR = path.resolve(SERIES_DIR) + path.sep;
+
+// Input validation constants
+const MAX_TITLE_LENGTH = 200;
+const MAX_DESCRIPTION_LENGTH = 5000;
+const MAX_SLUG_LENGTH = 100;
+const MAX_SERIES_NAME_LENGTH = 100;
+
 // Security: Allowlist for valid slug characters (alphanumeric, hyphens, underscores)
 const VALID_SLUG_REGEX = /^[a-z0-9][a-z0-9-_]*[a-z0-9]$|^[a-z0-9]$/;
 const VALID_SERIES_REGEX = /^[a-zA-Z0-9][a-zA-Z0-9-_ ]*[a-zA-Z0-9]$|^[a-zA-Z0-9]$/;
 
+// Cached metadata template (loaded once at startup, deep cloned on use)
+let cachedMetadataTemplate = null;
+async function getMetadataTemplate() {
+  if (cachedMetadataTemplate === null) {
+    try {
+      const templatePath = path.join(TEMPLATES_DIR, 'metadata-template.yml');
+      const content = await fs.readFile(templatePath, 'utf8');
+      cachedMetadataTemplate = yaml.load(content) || {};
+    } catch (err) {
+      // Default template if file doesn't exist
+      cachedMetadataTemplate = {
+        content_status: 'draft',
+        title: '',
+        description: '',
+        distribution: { profile: 'full' },
+        release: { target_date: '', release_group: '', depends_on: [], notes: '' },
+        recording: { date: '', duration_raw: '', duration_final: '', format: '4K' },
+        series: { name: '', episode_number: null },
+        workflow: {
+          scripted: false,
+          recorded: false,
+          edited: false,
+          thumbnail_created: false,
+          uploaded: false,
+          published: false
+        },
+        analytics: { youtube_id: '', publish_date: '' }
+      };
+    }
+  }
+  // Deep clone to prevent mutation of cached template
+  return JSON.parse(JSON.stringify(cachedMetadataTemplate));
+}
+
+// Helper: Recursively remove directory (for cleanup on failure)
+async function removeDirectory(dirPath) {
+  try {
+    await fs.rm(dirPath, { recursive: true, force: true });
+  } catch (err) {
+    console.error(`Failed to clean up directory ${dirPath}:`, err.message);
+  }
+}
+
 // Helper: Validate and sanitize slug (no path traversal)
 function isValidSlug(slug) {
   if (!slug || typeof slug !== 'string') return false;
-  if (slug.length < 1 || slug.length > 100) return false;
+  if (slug.length < 1 || slug.length > MAX_SLUG_LENGTH) return false;
   // Check for path traversal attempts
   if (slug.includes('..') || slug.includes('/') || slug.includes('\\')) return false;
   return VALID_SLUG_REGEX.test(slug);
@@ -29,7 +81,7 @@ function isValidSlug(slug) {
 // Helper: Validate series name
 function isValidSeriesName(name) {
   if (!name || typeof name !== 'string') return false;
-  if (name.length < 1 || name.length > 100) return false;
+  if (name.length < 1 || name.length > MAX_SERIES_NAME_LENGTH) return false;
   // Check for path traversal attempts
   if (name.includes('..') || name.includes('/') || name.includes('\\')) return false;
   return VALID_SERIES_REGEX.test(name);
@@ -311,6 +363,8 @@ router.get('/series', async (req, res) => {
 
 // POST /api/episodes - Create a new episode
 router.post('/episodes', async (req, res) => {
+  let episodePath = null; // Track for cleanup on failure
+
   try {
     const { series, topic, title, description, targetDate, distributionProfile } = req.body;
 
@@ -336,6 +390,21 @@ router.post('/episodes', async (req, res) => {
       });
     }
 
+    // Validate input lengths
+    if (title.length > MAX_TITLE_LENGTH) {
+      return res.status(400).json({
+        success: false,
+        error: `Title must be ${MAX_TITLE_LENGTH} characters or less`
+      });
+    }
+
+    if (description && description.length > MAX_DESCRIPTION_LENGTH) {
+      return res.status(400).json({
+        success: false,
+        error: `Description must be ${MAX_DESCRIPTION_LENGTH} characters or less`
+      });
+    }
+
     // Slugify and validate the topic
     const slug = slugify(topic);
     if (!isValidSlug(slug)) {
@@ -354,16 +423,18 @@ router.post('/episodes', async (req, res) => {
       });
     }
 
-    // Sanitize title (basic XSS prevention - strip HTML)
+    // Strip HTML tags from title as defense-in-depth
+    // Note: Primary XSS protection is output escaping in the frontend (escapeHtml)
+    // This prevents storing HTML that could cause issues in other contexts (logs, exports, etc.)
     const sanitizedTitle = title.replace(/<[^>]*>/g, '').trim();
     if (!sanitizedTitle) {
       return res.status(400).json({
         success: false,
-        error: 'Title cannot be empty after sanitization'
+        error: 'Title cannot be empty after removing HTML tags'
       });
     }
 
-    // Sanitize description if provided
+    // Strip HTML from description if provided (defense-in-depth)
     const sanitizedDescription = description
       ? description.replace(/<[^>]*>/g, '').trim()
       : '';
@@ -390,8 +461,7 @@ router.post('/episodes', async (req, res) => {
     // Validate distribution profile if provided
     if (distributionProfile) {
       try {
-        const profilesPath = path.join(__dirname, '..', '..', 'distribution-profiles.yml');
-        const profilesContent = await fs.readFile(profilesPath, 'utf8');
+        const profilesContent = await fs.readFile(DISTRIBUTION_PROFILES, 'utf8');
         const profiles = yaml.load(profilesContent);
         const validProfiles = Object.keys(profiles.profiles || {});
         if (!validProfiles.includes(distributionProfile)) {
@@ -401,8 +471,15 @@ router.post('/episodes', async (req, res) => {
           });
         }
       } catch (err) {
-        // If profiles file doesn't exist, accept any profile name
-        console.warn('Could not validate distribution profile:', err.message);
+        // Only ignore file-not-found errors; other errors may indicate real problems
+        if (err.code !== 'ENOENT') {
+          console.error('Error reading distribution profiles:', err.message);
+          return res.status(500).json({
+            success: false,
+            error: 'Failed to validate distribution profile'
+          });
+        }
+        // ENOENT: profiles file doesn't exist, accept any profile name
       }
     }
 
@@ -410,13 +487,12 @@ router.post('/episodes', async (req, res) => {
     const date = getCurrentDate();
     const episodeFolderName = `${date}-${slug}`;
     const seriesPath = path.join(SERIES_DIR, seriesName);
-    const episodePath = path.join(seriesPath, episodeFolderName);
+    episodePath = path.join(seriesPath, episodeFolderName);
 
-    // Additional security: ensure paths are within SERIES_DIR
-    const resolvedSeriesPath = path.resolve(seriesPath);
+    // Security: ensure paths are within SERIES_DIR using pre-resolved path + separator
+    // The trailing separator prevents prefix matching (e.g., /series-evil matching /series)
     const resolvedEpisodePath = path.resolve(episodePath);
-    if (!resolvedSeriesPath.startsWith(path.resolve(SERIES_DIR)) ||
-        !resolvedEpisodePath.startsWith(path.resolve(SERIES_DIR))) {
+    if (!resolvedEpisodePath.startsWith(RESOLVED_SERIES_DIR)) {
       return res.status(400).json({
         success: false,
         error: 'Invalid path detected'
@@ -439,41 +515,20 @@ router.post('/episodes', async (req, res) => {
       }
       throw err; // Re-throw other errors
     }
-    await fs.mkdir(path.join(episodePath, 'raw', 'camera'), { recursive: true });
-    await fs.mkdir(path.join(episodePath, 'raw', 'screen'), { recursive: true });
-    await fs.mkdir(path.join(episodePath, 'audio'), { recursive: true });
-    await fs.mkdir(path.join(episodePath, 'assets'), { recursive: true });
-    await fs.mkdir(path.join(episodePath, 'exports'), { recursive: true });
 
-    // Read and populate metadata template using proper YAML parsing
-    const metadataTemplatePath = path.join(TEMPLATES_DIR, 'metadata-template.yml');
-    let metadata;
-    try {
-      const templateContent = await fs.readFile(metadataTemplatePath, 'utf8');
-      metadata = yaml.load(templateContent) || {};
-    } catch (err) {
-      // If template doesn't exist, create basic metadata structure
-      metadata = {
-        content_status: 'draft',
-        title: '',
-        description: '',
-        distribution: { profile: 'full' },
-        release: { target_date: '', release_group: '', depends_on: [], notes: '' },
-        recording: { date: '', duration_raw: '', duration_final: '', format: '4K' },
-        series: { name: '', episode_number: null },
-        workflow: {
-          scripted: false,
-          recorded: false,
-          edited: false,
-          thumbnail_created: false,
-          uploaded: false,
-          published: false
-        },
-        analytics: { youtube_id: '', publish_date: '' }
-      };
-    }
+    // Create subdirectories in parallel for better performance
+    await Promise.all([
+      fs.mkdir(path.join(episodePath, 'raw', 'camera'), { recursive: true }),
+      fs.mkdir(path.join(episodePath, 'raw', 'screen'), { recursive: true }),
+      fs.mkdir(path.join(episodePath, 'audio'), { recursive: true }),
+      fs.mkdir(path.join(episodePath, 'assets'), { recursive: true }),
+      fs.mkdir(path.join(episodePath, 'exports'), { recursive: true })
+    ]);
 
-    // Update metadata with provided values (safe object mutation)
+    // Get metadata template (cached for performance)
+    const metadata = await getMetadataTemplate();
+
+    // Update metadata with provided values
     metadata.title = sanitizedTitle;
     metadata.content_status = 'draft';
 
@@ -584,6 +639,12 @@ router.post('/episodes', async (req, res) => {
 
   } catch (error) {
     console.error('Error creating episode:', error);
+
+    // Clean up partially created episode directory on failure
+    if (episodePath) {
+      await removeDirectory(episodePath);
+    }
+
     res.status(500).json({
       success: false,
       error: error.message

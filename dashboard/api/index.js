@@ -1103,7 +1103,9 @@ router.post('/assets/upload', upload.array('files', 20), async (req, res) => {
       // Multer's storage config generates: sanitized-name-timestamp-randomhex.ext
       const finalPath = path.join(targetDir, file.filename);
 
-      // Check if destination exists (shouldn't with random suffix, but be safe)
+      // Note: With timestamp + crypto.randomBytes(4), collision probability is negligible
+      // (~1 in 4.3 billion per millisecond). This check is defense-in-depth.
+      // TOCTOU window exists but collision risk is astronomically low.
       try {
         await fs.access(finalPath);
         // File exists - this is unexpected with random suffix
@@ -1376,8 +1378,10 @@ router.patch('/assets/*', async (req, res) => {
     const newParentDir = path.dirname(fullNewPath);
     await fs.mkdir(newParentDir, { recursive: true });
 
-    // Perform the rename/move atomically - handles EEXIST on Windows
-    // Note: On POSIX systems, rename overwrites existing files by design
+    // Perform the rename/move - handles EEXIST on Windows
+    // Note: On POSIX systems, fs.rename() atomically overwrites existing files by design,
+    // so EEXIST won't be thrown. The stat check provides user feedback but has a TOCTOU window.
+    // This is acceptable since this is a single-user tool where concurrent renames to same path are rare.
     try {
       // Check destination exists just before rename to minimize race window
       const destStats = await fs.stat(fullNewPath).catch(() => null);

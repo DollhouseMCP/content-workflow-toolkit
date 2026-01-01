@@ -645,4 +645,240 @@ describe('API Functional Tests', () => {
       });
     });
   });
+
+  describe('Asset Management Tests', () => {
+    const testAssetsDir = path.join(__dirname, '../../assets');
+    const testFolderName = 'api-test-folder';
+    const testSubFolder = 'api-test-subfolder';
+
+    after(async () => {
+      // Clean up test folders
+      try {
+        await fs.rm(path.join(testAssetsDir, testFolderName), { recursive: true, force: true });
+        await fs.rm(path.join(testAssetsDir, testSubFolder), { recursive: true, force: true });
+        await fs.rm(path.join(testAssetsDir, 'renamed-folder'), { recursive: true, force: true });
+      } catch (err) {
+        // Ignore cleanup errors
+      }
+    });
+
+    describe('POST /api/assets/folder', () => {
+      test('creates folder successfully', async () => {
+        const { status, data } = await apiRequest('/api/assets/folder', {
+          method: 'POST',
+          body: JSON.stringify({ name: testFolderName })
+        });
+
+        assert.strictEqual(status, 200);
+        assert.strictEqual(data.success, true);
+        assert.ok(data.folder, 'should return folder data');
+        assert.strictEqual(data.folder.name, testFolderName);
+      });
+
+      test('returns 400 for duplicate folder', async () => {
+        // Try to create the same folder again
+        const { status, data } = await apiRequest('/api/assets/folder', {
+          method: 'POST',
+          body: JSON.stringify({ name: testFolderName })
+        });
+
+        assert.strictEqual(status, 400);
+        assert.strictEqual(data.success, false);
+        assert.ok(data.error.includes('exists'), 'error should mention exists');
+      });
+
+      test('returns 400 for empty folder name', async () => {
+        const { status, data } = await apiRequest('/api/assets/folder', {
+          method: 'POST',
+          body: JSON.stringify({ name: '' })
+        });
+
+        assert.strictEqual(status, 400);
+        assert.strictEqual(data.success, false);
+      });
+
+      test('sanitizes folder name with special characters', async () => {
+        const { status, data } = await apiRequest('/api/assets/folder', {
+          method: 'POST',
+          body: JSON.stringify({ name: 'test<script>alert(1)</script>folder' })
+        });
+
+        if (status === 200) {
+          assert.ok(!data.folder.name.includes('<'), 'folder name should not contain special chars');
+          // Clean up
+          await fs.rm(path.join(testAssetsDir, data.folder.name), { recursive: true, force: true }).catch(() => {});
+        }
+      });
+
+      test('rejects path traversal in folder name', async () => {
+        const { status, data } = await apiRequest('/api/assets/folder', {
+          method: 'POST',
+          body: JSON.stringify({ name: '../../../etc' })
+        });
+
+        // Should either be rejected or sanitized to safe name
+        if (status === 200) {
+          assert.ok(!data.folder.name.includes('..'), 'folder name should not contain ..');
+          await fs.rm(path.join(testAssetsDir, data.folder.name), { recursive: true, force: true }).catch(() => {});
+        } else {
+          assert.strictEqual(status, 400);
+        }
+      });
+
+      test('rejects path traversal in parent path', async () => {
+        const { status, data } = await apiRequest('/api/assets/folder', {
+          method: 'POST',
+          body: JSON.stringify({
+            path: '../../../etc',
+            name: 'evil'
+          })
+        });
+
+        assert.strictEqual(status, 400);
+        assert.strictEqual(data.success, false);
+      });
+    });
+
+    describe('DELETE /api/assets/*', () => {
+      before(async () => {
+        // Create a folder to delete
+        await apiRequest('/api/assets/folder', {
+          method: 'POST',
+          body: JSON.stringify({ name: testSubFolder })
+        });
+      });
+
+      test('deletes folder successfully', async () => {
+        const { status, data } = await apiRequest(`/api/assets/${testSubFolder}`, {
+          method: 'DELETE'
+        });
+
+        assert.strictEqual(status, 200);
+        assert.strictEqual(data.success, true);
+      });
+
+      test('returns 404 for non-existent path', async () => {
+        const { status, data } = await apiRequest('/api/assets/nonexistent-folder-12345', {
+          method: 'DELETE'
+        });
+
+        assert.strictEqual(status, 404);
+        assert.strictEqual(data.success, false);
+      });
+
+      test('returns 400 for missing path', async () => {
+        const { status, data } = await apiRequest('/api/assets/', {
+          method: 'DELETE'
+        });
+
+        assert.strictEqual(status, 400);
+        assert.strictEqual(data.success, false);
+      });
+
+      test('rejects path traversal attempt', async () => {
+        const { status, data } = await apiRequest('/api/assets/..%2F..%2Fetc', {
+          method: 'DELETE'
+        });
+
+        assert.strictEqual(status, 400);
+        assert.strictEqual(data.success, false);
+      });
+
+      test('prevents deleting assets root', async () => {
+        const { status, data } = await apiRequest('/api/assets/.', {
+          method: 'DELETE'
+        });
+
+        assert.strictEqual(status, 400);
+        assert.strictEqual(data.success, false);
+      });
+    });
+
+    describe('PATCH /api/assets/* (rename)', () => {
+      before(async () => {
+        // Create a folder to rename
+        await apiRequest('/api/assets/folder', {
+          method: 'POST',
+          body: JSON.stringify({ name: 'rename-test-folder' })
+        });
+      });
+
+      after(async () => {
+        // Clean up
+        await fs.rm(path.join(testAssetsDir, 'rename-test-folder'), { recursive: true, force: true }).catch(() => {});
+        await fs.rm(path.join(testAssetsDir, 'renamed-folder'), { recursive: true, force: true }).catch(() => {});
+      });
+
+      test('renames folder successfully', async () => {
+        const { status, data } = await apiRequest('/api/assets/rename-test-folder', {
+          method: 'PATCH',
+          body: JSON.stringify({ newPath: 'renamed-folder' })
+        });
+
+        assert.strictEqual(status, 200);
+        assert.strictEqual(data.success, true);
+        assert.ok(data.newPath, 'should return new path');
+      });
+
+      test('returns 404 for non-existent source', async () => {
+        const { status, data } = await apiRequest('/api/assets/nonexistent-folder-xyz', {
+          method: 'PATCH',
+          body: JSON.stringify({ newPath: 'new-name' })
+        });
+
+        assert.strictEqual(status, 404);
+        assert.strictEqual(data.success, false);
+      });
+
+      test('returns 400 for missing newPath', async () => {
+        const { status, data } = await apiRequest('/api/assets/renamed-folder', {
+          method: 'PATCH',
+          body: JSON.stringify({})
+        });
+
+        assert.strictEqual(status, 400);
+        assert.strictEqual(data.success, false);
+      });
+
+      test('rejects path traversal in current path', async () => {
+        const { status, data } = await apiRequest('/api/assets/..%2F..%2Fetc', {
+          method: 'PATCH',
+          body: JSON.stringify({ newPath: 'new-name' })
+        });
+
+        assert.strictEqual(status, 400);
+        assert.strictEqual(data.success, false);
+      });
+
+      test('rejects path traversal in new path', async () => {
+        const { status, data } = await apiRequest('/api/assets/renamed-folder', {
+          method: 'PATCH',
+          body: JSON.stringify({ newPath: '../../../etc/evil' })
+        });
+
+        assert.strictEqual(status, 400);
+        assert.strictEqual(data.success, false);
+      });
+
+      test('sanitizes filename with special characters', async () => {
+        // Create a test folder first
+        await apiRequest('/api/assets/folder', {
+          method: 'POST',
+          body: JSON.stringify({ name: 'sanitize-test-folder' })
+        });
+
+        const { status, data } = await apiRequest('/api/assets/sanitize-test-folder', {
+          method: 'PATCH',
+          body: JSON.stringify({ newPath: 'test<script>name' })
+        });
+
+        if (status === 200) {
+          assert.ok(!data.newPath.includes('<'), 'new path should not contain special chars');
+          await fs.rm(path.join(testAssetsDir, data.newPath), { recursive: true, force: true }).catch(() => {});
+        }
+        // Clean up original if rename failed
+        await fs.rm(path.join(testAssetsDir, 'sanitize-test-folder'), { recursive: true, force: true }).catch(() => {});
+      });
+    });
+  });
 });

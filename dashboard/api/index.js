@@ -74,10 +74,18 @@ function sanitizeFilename(filename) {
 }
 
 // Validate path is within assets directory (prevent path traversal)
+// Uses path.relative() for robust cross-platform handling
 function isPathWithinAssets(targetPath) {
   const resolvedPath = path.resolve(ASSETS_DIR, targetPath);
   const normalizedAssetsDir = path.resolve(ASSETS_DIR);
-  return resolvedPath.startsWith(normalizedAssetsDir + path.sep) || resolvedPath === normalizedAssetsDir;
+  const relativePath = path.relative(normalizedAssetsDir, resolvedPath);
+
+  // Path is within assets if:
+  // 1. Relative path doesn't start with '..' (would indicate escaping the directory)
+  // 2. Relative path isn't an absolute path (edge case on Windows)
+  // 3. Relative path is empty string (exact match) or a valid child path
+  return relativePath === '' ||
+         (!relativePath.startsWith('..') && !path.isAbsolute(relativePath));
 }
 
 // Validate file extension
@@ -99,8 +107,9 @@ const storage = multer.diskStorage({
   },
   filename: function (req, file, cb) {
     // Generate unique filename with original extension
+    // Uses crypto.randomBytes for cryptographically secure unique suffix
     const sanitized = sanitizeFilename(file.originalname);
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    const uniqueSuffix = `${Date.now()}-${randomBytes(4).toString('hex')}`;
     const ext = path.extname(sanitized);
     const name = path.basename(sanitized, ext);
     cb(null, `${name}-${uniqueSuffix}${ext}`);
@@ -1128,7 +1137,7 @@ router.post('/assets/upload', upload.array('files', 20), async (req, res) => {
     console.error('Upload error:', error);
     res.status(500).json({
       success: false,
-      error: error.message
+      error: 'An internal error occurred during upload'
     });
   }
 });
@@ -1172,19 +1181,23 @@ router.post('/assets/folder', async (req, res) => {
 
     const fullPath = path.join(ASSETS_DIR, newFolderPath);
 
-    // Check if folder already exists
-    try {
-      await fs.access(fullPath);
-      return res.status(400).json({
-        success: false,
-        error: 'Folder already exists'
-      });
-    } catch {
-      // Folder doesn't exist, which is what we want
-    }
+    // Ensure parent directory exists first (recursive is safe here)
+    const parentFullPath = path.dirname(fullPath);
+    await fs.mkdir(parentFullPath, { recursive: true });
 
-    // Create the folder
-    await fs.mkdir(fullPath, { recursive: true });
+    // Create the final folder without recursive to get EEXIST error if it exists
+    // This avoids TOCTOU race condition with access() check
+    try {
+      await fs.mkdir(fullPath, { recursive: false });
+    } catch (mkdirError) {
+      if (mkdirError.code === 'EEXIST') {
+        return res.status(400).json({
+          success: false,
+          error: 'Folder already exists'
+        });
+      }
+      throw mkdirError;
+    }
 
     res.json({
       success: true,
@@ -1199,7 +1212,7 @@ router.post('/assets/folder', async (req, res) => {
     console.error('Create folder error:', error);
     res.status(500).json({
       success: false,
-      error: error.message
+      error: 'An internal error occurred while creating folder'
     });
   }
 });
@@ -1264,7 +1277,7 @@ router.delete('/assets/*', async (req, res) => {
     console.error('Delete error:', error);
     res.status(500).json({
       success: false,
-      error: error.message
+      error: 'An internal error occurred during delete operation'
     });
   }
 });
@@ -1290,6 +1303,12 @@ router.patch('/assets/*', async (req, res) => {
       });
     }
 
+    // Sanitize the filename portion of the new path
+    const newPathDir = path.dirname(newPath);
+    const newPathFilename = path.basename(newPath);
+    const sanitizedFilename = sanitizeFilename(newPathFilename);
+    const sanitizedNewPath = newPathDir === '.' ? sanitizedFilename : path.join(newPathDir, sanitizedFilename);
+
     // Security: Validate both paths are within assets directory
     if (!isPathWithinAssets(currentPath)) {
       return res.status(400).json({
@@ -1298,7 +1317,7 @@ router.patch('/assets/*', async (req, res) => {
       });
     }
 
-    if (!isPathWithinAssets(newPath)) {
+    if (!isPathWithinAssets(sanitizedNewPath)) {
       return res.status(400).json({
         success: false,
         error: 'Invalid new path'
@@ -1306,7 +1325,7 @@ router.patch('/assets/*', async (req, res) => {
     }
 
     const fullCurrentPath = path.join(ASSETS_DIR, currentPath);
-    const fullNewPath = path.join(ASSETS_DIR, newPath);
+    const fullNewPath = path.join(ASSETS_DIR, sanitizedNewPath);
 
     // Prevent modifying the assets root
     if (path.resolve(fullCurrentPath) === path.resolve(ASSETS_DIR)) {
@@ -1347,15 +1366,15 @@ router.patch('/assets/*', async (req, res) => {
     res.json({
       success: true,
       oldPath: currentPath,
-      newPath: newPath,
-      message: `Successfully renamed/moved to: ${newPath}`
+      newPath: sanitizedNewPath,
+      message: `Successfully renamed/moved to: ${sanitizedNewPath}`
     });
 
   } catch (error) {
     console.error('Rename/move error:', error);
     res.status(500).json({
       success: false,
-      error: error.message
+      error: 'An internal error occurred during rename/move operation'
     });
   }
 });

@@ -286,8 +286,18 @@ function isValidSeriesName(name) {
  * Converts text to a URL-friendly slug.
  * Transforms to lowercase, replaces spaces with hyphens, removes non-word characters,
  * and trims leading/trailing hyphens.
- * @param {string} text - The text to convert to a slug
- * @returns {string} The URL-friendly slug
+ *
+ * NOTE: This function is intentionally duplicated in the client-side code.
+ * Keep in sync with: dashboard/public/app.js (ContentDashboard.slugify method)
+ *
+ * The duplication exists because:
+ * - Server needs slugify for validation and folder creation
+ * - Client needs slugify for live preview/auto-formatting in forms
+ * - A shared module would require a build step (adds complexity)
+ * - An API endpoint would add latency for real-time input formatting
+ *
+ * @param {string} text - The text to slugify
+ * @returns {string} URL-friendly slug (lowercase, hyphens, no special chars)
  * @example
  * slugify('Hello World!') // Returns 'hello-world'
  * slugify('  Multiple   Spaces  ') // Returns 'multiple-spaces'

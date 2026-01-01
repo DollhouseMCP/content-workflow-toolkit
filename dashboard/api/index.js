@@ -57,7 +57,15 @@ const ALLOWED_EXTENSIONS = new Set([
 // Maximum file size: 100MB
 const MAX_FILE_SIZE = 100 * 1024 * 1024;
 
-// Sanitize filename - remove special characters that could cause issues
+/**
+ * Sanitizes a filename by removing special characters that could cause filesystem issues.
+ * Replaces dangerous characters with underscores and limits the filename length.
+ * @param {string} filename - The original filename to sanitize
+ * @returns {string} The sanitized filename with extension preserved
+ * @example
+ * sanitizeFilename('my file@#$.txt') // Returns 'my_file___.txt'
+ * sanitizeFilename('a'.repeat(250) + '.pdf') // Returns truncated name + '.pdf'
+ */
 function sanitizeFilename(filename) {
   // Get the extension
   const ext = path.extname(filename).toLowerCase();
@@ -73,8 +81,15 @@ function sanitizeFilename(filename) {
   return sanitized + ext;
 }
 
-// Validate path is within assets directory (prevent path traversal)
-// Uses path.relative() for robust cross-platform handling
+/**
+ * Validates that a target path is within the assets directory to prevent path traversal attacks.
+ * Uses path.relative() for robust cross-platform handling.
+ * @param {string} targetPath - The path to validate (relative to assets directory)
+ * @returns {boolean} True if the path is safely within the assets directory, false otherwise
+ * @example
+ * isPathWithinAssets('images/logo.png') // Returns true
+ * isPathWithinAssets('../config.yml') // Returns false (path traversal attempt)
+ */
 function isPathWithinAssets(targetPath) {
   const resolvedPath = path.resolve(ASSETS_DIR, targetPath);
   const normalizedAssetsDir = path.resolve(ASSETS_DIR);
@@ -88,7 +103,14 @@ function isPathWithinAssets(targetPath) {
          (!relativePath.startsWith('..') && !path.isAbsolute(relativePath));
 }
 
-// Validate file extension
+/**
+ * Checks if a file has an allowed extension based on the ALLOWED_EXTENSIONS whitelist.
+ * @param {string} filename - The filename to check (with extension)
+ * @returns {boolean} True if the file extension is in the allowed list, false otherwise
+ * @example
+ * isAllowedExtension('photo.jpg') // Returns true
+ * isAllowedExtension('script.exe') // Returns false
+ */
 function isAllowedExtension(filename) {
   const ext = path.extname(filename).toLowerCase();
   return ALLOWED_EXTENSIONS.has(ext);
@@ -135,6 +157,16 @@ const upload = multer({
 
 // Cached metadata template (loaded once at startup, deep cloned on use)
 let cachedMetadataTemplate = null;
+
+/**
+ * Returns a deep clone of the cached metadata template.
+ * Loads the template from disk on first call and caches it for subsequent requests.
+ * @async
+ * @returns {Promise<Object>} A deep clone of the metadata template object
+ * @example
+ * const template = await getMetadataTemplate();
+ * template.title = 'My Episode'; // Safe to modify - it's a clone
+ */
 async function getMetadataTemplate() {
   if (cachedMetadataTemplate === null) {
     try {
@@ -186,7 +218,14 @@ async function getDistributionProfiles() {
   return cachedDistributionProfiles;
 }
 
-// Helper: Recursively remove directory (for cleanup on failure)
+/**
+ * Recursively removes a directory and all its contents.
+ * Used for cleanup on failure during episode creation.
+ * Errors are logged but not thrown to allow cleanup to continue.
+ * @async
+ * @param {string} dirPath - The absolute path to the directory to remove
+ * @returns {Promise<void>}
+ */
 async function removeDirectory(dirPath) {
   try {
     await fs.rm(dirPath, { recursive: true, force: true });
@@ -195,7 +234,16 @@ async function removeDirectory(dirPath) {
   }
 }
 
-// Helper: Validate and sanitize slug (no path traversal)
+/**
+ * Validates that a slug matches the required format and contains no path traversal attempts.
+ * Valid slugs contain only lowercase letters, numbers, hyphens, and underscores.
+ * @param {string} slug - The slug to validate
+ * @returns {boolean} True if the slug is valid, false otherwise
+ * @example
+ * isValidSlug('my-episode-01') // Returns true
+ * isValidSlug('My Episode!') // Returns false (uppercase and special chars)
+ * isValidSlug('../etc/passwd') // Returns false (path traversal)
+ */
 function isValidSlug(slug) {
   if (!slug || typeof slug !== 'string') return false;
   if (slug.length < 1 || slug.length > MAX_SLUG_LENGTH) return false;
@@ -204,7 +252,16 @@ function isValidSlug(slug) {
   return VALID_SLUG_REGEX.test(slug);
 }
 
-// Helper: Validate series name
+/**
+ * Validates that a series name matches the required format and contains no path traversal attempts.
+ * Valid series names contain letters, numbers, spaces, hyphens, and underscores.
+ * @param {string} name - The series name to validate
+ * @returns {boolean} True if the series name is valid, false otherwise
+ * @example
+ * isValidSeriesName('My Series 2024') // Returns true
+ * isValidSeriesName('Series!@#') // Returns false (special chars)
+ * isValidSeriesName('../secret') // Returns false (path traversal)
+ */
 function isValidSeriesName(name) {
   if (!name || typeof name !== 'string') return false;
   if (name.length < 1 || name.length > MAX_SERIES_NAME_LENGTH) return false;
@@ -213,7 +270,17 @@ function isValidSeriesName(name) {
   return VALID_SERIES_REGEX.test(name);
 }
 
-// Helper: Slugify a string
+/**
+ * Converts text to a URL-friendly slug.
+ * Transforms to lowercase, replaces spaces with hyphens, removes non-word characters,
+ * and trims leading/trailing hyphens.
+ * @param {string} text - The text to convert to a slug
+ * @returns {string} The URL-friendly slug
+ * @example
+ * slugify('Hello World!') // Returns 'hello-world'
+ * slugify('  Multiple   Spaces  ') // Returns 'multiple-spaces'
+ * slugify('Special @#$ Characters') // Returns 'special-characters'
+ */
 function slugify(text) {
   return text
     .toString()
@@ -226,7 +293,13 @@ function slugify(text) {
     .replace(/-+$/, '');            // Trim - from end
 }
 
-// Helper: Get current date in YYYY-MM-DD format
+/**
+ * Returns the current date in YYYY-MM-DD format.
+ * Uses the local timezone for date calculation.
+ * @returns {string} The current date formatted as YYYY-MM-DD
+ * @example
+ * getCurrentDate() // Returns '2024-01-15' (example)
+ */
 function getCurrentDate() {
   const now = new Date();
   const year = now.getFullYear();

@@ -1074,6 +1074,8 @@ router.post('/episodes', async (req, res) => {
 
 // POST /api/assets/upload - Upload files to a target folder
 router.post('/assets/upload', upload.array('files', 20), async (req, res) => {
+  const movedFiles = []; // Track files that have been moved for cleanup on error (must be outside try for catch access)
+
   try {
     const targetFolder = req.body.targetFolder || '';
 
@@ -1101,8 +1103,21 @@ router.post('/assets/upload', upload.array('files', 20), async (req, res) => {
       // Multer's storage config generates: sanitized-name-timestamp-randomhex.ext
       const finalPath = path.join(targetDir, file.filename);
 
+      // Check if destination exists (shouldn't with random suffix, but be safe)
+      try {
+        await fs.access(finalPath);
+        // File exists - this is unexpected with random suffix
+        throw Object.assign(new Error('File already exists at destination'), { code: 'EEXIST' });
+      } catch (err) {
+        if (err.code !== 'ENOENT') {
+          throw err; // Re-throw if not "file doesn't exist"
+        }
+        // Good - file doesn't exist, proceed with rename
+      }
+
       // Move file from temp uploads to target directory
       await fs.rename(file.path, finalPath);
+      movedFiles.push(finalPath); // Track for cleanup
 
       // Get file stats for response
       const stats = await fs.stat(finalPath);
@@ -1123,7 +1138,11 @@ router.post('/assets/upload', upload.array('files', 20), async (req, res) => {
     });
 
   } catch (error) {
-    // Clean up any uploaded files on error
+    // Clean up files that were moved to target directory
+    for (const movedPath of movedFiles) {
+      await fs.unlink(movedPath).catch(() => {});
+    }
+    // Clean up any temp files that weren't moved yet
     for (const file of req.files || []) {
       await fs.unlink(file.path).catch(() => {});
     }

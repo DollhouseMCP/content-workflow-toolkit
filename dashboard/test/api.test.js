@@ -14,7 +14,6 @@ let baseUrl;
 
 // Test data directory
 const testSeriesDir = path.join(__dirname, '../../series');
-const testAssetsDir = path.join(__dirname, '../../assets');
 
 async function startServer() {
   const app = express();
@@ -180,6 +179,22 @@ describe('API Functional Tests', () => {
           topic: 'test-date',
           title: 'Test Date',
           targetDate: 'invalid-date'
+        })
+      });
+
+      assert.strictEqual(status, 400);
+      assert.strictEqual(data.success, false);
+      assert.ok(data.error.includes('date'), 'error should mention date');
+    });
+
+    test('returns 400 for impossible date like Feb 30', async () => {
+      const { status, data } = await apiRequest('/api/episodes', {
+        method: 'POST',
+        body: JSON.stringify({
+          series: testEpisodeSeries,
+          topic: 'test-impossible-date',
+          title: 'Test Impossible Date',
+          targetDate: '2025-02-30'
         })
       });
 

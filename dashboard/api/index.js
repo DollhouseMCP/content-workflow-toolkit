@@ -64,6 +64,25 @@ async function getMetadataTemplate() {
   return JSON.parse(JSON.stringify(cachedMetadataTemplate));
 }
 
+// Cached distribution profiles (loaded once at startup)
+let cachedDistributionProfiles = null;
+async function getDistributionProfiles() {
+  if (cachedDistributionProfiles === null) {
+    try {
+      const content = await fs.readFile(DISTRIBUTION_PROFILES, 'utf8');
+      cachedDistributionProfiles = yaml.load(content) || {};
+    } catch (err) {
+      if (err.code === 'ENOENT') {
+        // File doesn't exist - no profiles to validate against
+        cachedDistributionProfiles = { profiles: {} };
+      } else {
+        throw err;
+      }
+    }
+  }
+  return cachedDistributionProfiles;
+}
+
 // Helper: Recursively remove directory (for cleanup on failure)
 async function removeDirectory(dirPath) {
   try {
@@ -414,7 +433,7 @@ router.post('/episodes', async (req, res) => {
     if (!isValidSlug(slug)) {
       return res.status(400).json({
         success: false,
-        error: 'Invalid topic/slug. Use only lowercase letters, numbers, and hyphens.'
+        error: 'Invalid topic/slug. Use only lowercase letters, numbers, hyphens, and underscores.'
       });
     }
 
@@ -452,9 +471,13 @@ router.post('/episodes', async (req, res) => {
           error: 'Invalid target date format. Use YYYY-MM-DD.'
         });
       }
-      // Validate it's a real date
-      const parsedDate = new Date(targetDate + 'T00:00:00');
-      if (isNaN(parsedDate.getTime())) {
+      // Validate it's a real date (not just valid format)
+      // Parse and verify the date components match what was provided
+      const [year, month, day] = targetDate.split('-').map(Number);
+      const parsedDate = new Date(year, month - 1, day);
+      if (parsedDate.getFullYear() !== year ||
+          parsedDate.getMonth() !== month - 1 ||
+          parsedDate.getDate() !== day) {
         return res.status(400).json({
           success: false,
           error: 'Invalid target date.'
@@ -462,28 +485,24 @@ router.post('/episodes', async (req, res) => {
       }
     }
 
-    // Validate distribution profile if provided
+    // Validate distribution profile if provided (uses cached profiles)
     if (distributionProfile) {
       try {
-        const profilesContent = await fs.readFile(DISTRIBUTION_PROFILES, 'utf8');
-        const profiles = yaml.load(profilesContent);
+        const profiles = await getDistributionProfiles();
         const validProfiles = Object.keys(profiles.profiles || {});
-        if (!validProfiles.includes(distributionProfile)) {
+        // Only validate if profiles exist; empty profiles means accept any
+        if (validProfiles.length > 0 && !validProfiles.includes(distributionProfile)) {
           return res.status(400).json({
             success: false,
             error: `Invalid distribution profile. Valid options: ${validProfiles.join(', ')}`
           });
         }
       } catch (err) {
-        // Only ignore file-not-found errors; other errors may indicate real problems
-        if (err.code !== 'ENOENT') {
-          console.error('Error reading distribution profiles:', err.message);
-          return res.status(500).json({
-            success: false,
-            error: 'Failed to validate distribution profile'
-          });
-        }
-        // ENOENT: profiles file doesn't exist, accept any profile name
+        console.error('Error reading distribution profiles:', err.message);
+        return res.status(500).json({
+          success: false,
+          error: 'Failed to validate distribution profile'
+        });
       }
     }
 

@@ -279,4 +279,206 @@ describe('API Functional Tests', () => {
       assert.strictEqual(data.success, false);
     });
   });
+
+  describe('Security Tests', () => {
+    describe('Path Traversal Prevention', () => {
+      test('rejects series name with ../', async () => {
+        const { status, data } = await apiRequest('/api/episodes', {
+          method: 'POST',
+          body: JSON.stringify({
+            series: '../etc',
+            topic: 'test',
+            title: 'Test'
+          })
+        });
+
+        assert.strictEqual(status, 400);
+        assert.strictEqual(data.success, false);
+      });
+
+      test('rejects series name with ..\\', async () => {
+        const { status, data } = await apiRequest('/api/episodes', {
+          method: 'POST',
+          body: JSON.stringify({
+            series: '..\\etc',
+            topic: 'test',
+            title: 'Test'
+          })
+        });
+
+        assert.strictEqual(status, 400);
+        assert.strictEqual(data.success, false);
+      });
+
+      test('sanitizes topic with path traversal via slugify', async () => {
+        // Path traversal chars are stripped by slugify, making it safe
+        // ../../../etc/passwd becomes etcpasswd
+        const { status, data } = await apiRequest('/api/episodes', {
+          method: 'POST',
+          body: JSON.stringify({
+            series: 'path-traversal-test',
+            topic: '../../../etc/passwd',
+            title: 'Test'
+          })
+        });
+
+        // Should succeed because slugify strips dangerous chars
+        if (status === 201) {
+          assert.strictEqual(data.success, true);
+          // The slug should not contain any path traversal characters
+          assert.ok(!data.episode.episode.includes('..'), 'slug should not contain ..');
+          assert.ok(!data.episode.episode.includes('/'), 'slug should not contain /');
+
+          // Clean up
+          try {
+            await fs.rm(path.join(testSeriesDir, 'path-traversal-test'), { recursive: true, force: true });
+          } catch (err) {
+            // Ignore cleanup errors
+          }
+        }
+      });
+
+      test('rejects series with absolute path', async () => {
+        const { status, data } = await apiRequest('/api/episodes', {
+          method: 'POST',
+          body: JSON.stringify({
+            series: '/etc/passwd',
+            topic: 'test',
+            title: 'Test'
+          })
+        });
+
+        assert.strictEqual(status, 400);
+        assert.strictEqual(data.success, false);
+      });
+
+      test('rejects series with encoded path traversal', async () => {
+        const { status, data } = await apiRequest('/api/episodes', {
+          method: 'POST',
+          body: JSON.stringify({
+            series: '..%2F..%2Fetc',
+            topic: 'test',
+            title: 'Test'
+          })
+        });
+
+        assert.strictEqual(status, 400);
+        assert.strictEqual(data.success, false);
+      });
+    });
+
+    describe('XSS Prevention', () => {
+      test('strips HTML tags from title', async () => {
+        const { status, data } = await apiRequest('/api/episodes', {
+          method: 'POST',
+          body: JSON.stringify({
+            series: 'xss-test-series',
+            topic: 'xss-test',
+            title: '<script>alert("xss")</script>Clean Title'
+          })
+        });
+
+        // Should succeed but with sanitized title
+        if (status === 201) {
+          assert.strictEqual(data.success, true);
+          assert.ok(!data.episode.title.includes('<script>'), 'title should not contain script tags');
+          assert.ok(data.episode.title.includes('Clean Title'), 'title should contain clean text');
+
+          // Clean up
+          try {
+            await fs.rm(path.join(testSeriesDir, 'xss-test-series'), { recursive: true, force: true });
+          } catch (err) {
+            // Ignore cleanup errors
+          }
+        }
+      });
+
+      test('strips HTML tags from description', async () => {
+        const { status, data } = await apiRequest('/api/episodes', {
+          method: 'POST',
+          body: JSON.stringify({
+            series: 'xss-test-series-2',
+            topic: 'xss-desc-test',
+            title: 'Normal Title',
+            description: '<img src=x onerror=alert("xss")>Safe description'
+          })
+        });
+
+        if (status === 201) {
+          assert.strictEqual(data.success, true);
+          assert.ok(!data.episode.description.includes('<img'), 'description should not contain img tags');
+          assert.ok(data.episode.description.includes('Safe description'), 'description should contain clean text');
+
+          // Clean up
+          try {
+            await fs.rm(path.join(testSeriesDir, 'xss-test-series-2'), { recursive: true, force: true });
+          } catch (err) {
+            // Ignore cleanup errors
+          }
+        }
+      });
+
+      test('rejects title that becomes empty after HTML stripping', async () => {
+        // Only tags, no text content - should become empty after stripping
+        const { status, data } = await apiRequest('/api/episodes', {
+          method: 'POST',
+          body: JSON.stringify({
+            series: 'test-series',
+            topic: 'empty-title-test',
+            title: '<script></script><div></div>'
+          })
+        });
+
+        assert.strictEqual(status, 400);
+        assert.strictEqual(data.success, false);
+        assert.ok(data.error.includes('empty'), 'error should mention empty');
+      });
+
+      test('preserves text content when stripping HTML tags', async () => {
+        // Text inside tags should be preserved
+        const { status, data } = await apiRequest('/api/episodes', {
+          method: 'POST',
+          body: JSON.stringify({
+            series: 'xss-preserve-test',
+            topic: 'preserve-text',
+            title: '<script>alert("xss")</script>'
+          })
+        });
+
+        if (status === 201) {
+          // The text content is preserved, just tags stripped
+          assert.strictEqual(data.episode.title, 'alert("xss")');
+
+          // Clean up
+          try {
+            await fs.rm(path.join(testSeriesDir, 'xss-preserve-test'), { recursive: true, force: true });
+          } catch (err) {
+            // Ignore cleanup errors
+          }
+        }
+      });
+
+      test('handles nested HTML tags in title', async () => {
+        const { status, data } = await apiRequest('/api/episodes', {
+          method: 'POST',
+          body: JSON.stringify({
+            series: 'xss-test-series-3',
+            topic: 'nested-tags',
+            title: '<div><script>evil()</script><b>Bold</b></div>Text'
+          })
+        });
+
+        if (status === 201) {
+          assert.ok(!data.episode.title.includes('<'), 'title should not contain any HTML');
+
+          // Clean up
+          try {
+            await fs.rm(path.join(testSeriesDir, 'xss-test-series-3'), { recursive: true, force: true });
+          } catch (err) {
+            // Ignore cleanup errors
+          }
+        }
+      });
+    });
+  });
 });

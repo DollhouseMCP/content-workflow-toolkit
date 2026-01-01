@@ -3,6 +3,7 @@ import fs from 'fs/promises';
 import fsSync from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { randomBytes } from 'crypto';
 import yaml from 'js-yaml';
 import multer from 'multer';
 
@@ -1092,9 +1093,9 @@ router.post('/assets/upload', upload.array('files', 20), async (req, res) => {
       const ext = path.extname(sanitizedName);
       const baseName = path.basename(sanitizedName, ext);
 
-      // Generate unique filename using timestamp + random suffix to avoid race conditions
-      // This is safer than checking file existence (TOCTOU vulnerability)
-      const uniqueSuffix = `${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
+      // Generate unique filename using timestamp + cryptographically secure random suffix
+      // This avoids race conditions (TOCTOU vulnerability) and collision risks
+      const uniqueSuffix = `${Date.now()}-${randomBytes(4).toString('hex')}`;
       const finalName = `${baseName}-${uniqueSuffix}${ext}`;
       const finalPath = path.join(targetDir, finalName);
 

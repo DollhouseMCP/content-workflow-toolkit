@@ -1,0 +1,26 @@
+# Development Dockerfile with hot reload
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Install nodemon for hot reload
+RUN npm install -g nodemon
+
+# Copy package files
+COPY dashboard/package*.json ./dashboard/
+
+# Install all dependencies (including devDependencies)
+RUN cd dashboard && npm install
+
+# Create content directories
+RUN mkdir -p /app/series /app/assets
+
+ENV NODE_ENV=development
+ENV PORT=3000
+
+EXPOSE 3000
+
+WORKDIR /app/dashboard
+
+# Use nodemon for auto-restart on file changes
+CMD ["nodemon", "--watch", ".", "--ext", "js,json,yml,yaml", "server.js"]

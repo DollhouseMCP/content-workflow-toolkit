@@ -387,6 +387,7 @@ router.get('/series', async (req, res) => {
 // POST /api/episodes - Create a new episode
 router.post('/episodes', async (req, res) => {
   let episodePath = null; // Track for cleanup on failure
+  let episodeCreated = false; // Only true after we successfully create the folder
 
   try {
     const { series, topic, title, description, targetDate, distributionProfile } = req.body;
@@ -529,6 +530,7 @@ router.post('/episodes', async (req, res) => {
     // This avoids TOCTOU race condition between check and creation
     try {
       await fs.mkdir(episodePath, { recursive: false });
+      episodeCreated = true; // Mark that WE created this folder (safe to cleanup on failure)
     } catch (err) {
       if (err.code === 'EEXIST') {
         return res.status(409).json({
@@ -661,16 +663,18 @@ router.post('/episodes', async (req, res) => {
     });
 
   } catch (error) {
+    // Log full error details server-side only
     console.error('Error creating episode:', error);
 
-    // Clean up partially created episode directory on failure
-    if (episodePath) {
+    // Only clean up if WE created the episode folder (prevents removing pre-existing folders)
+    if (episodeCreated && episodePath) {
       await removeDirectory(episodePath);
     }
 
+    // Return generic error message to client (don't leak internal paths/details)
     res.status(500).json({
       success: false,
-      error: error.message
+      error: 'Failed to create episode. Please try again.'
     });
   }
 });

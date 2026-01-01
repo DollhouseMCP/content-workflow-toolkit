@@ -1227,6 +1227,64 @@ class Dashboard {
         document.querySelectorAll('[data-modal-close="new-episode-modal"]').forEach(btn => {
             btn.addEventListener('click', () => this.closeModal('new-episode-modal'));
         });
+
+        // Clear validation errors on input change
+        this.attachValidationErrorClearListeners();
+    }
+
+    /**
+     * Attaches input event listeners to form fields to clear validation errors
+     * when the user starts typing or changes a value.
+     */
+    attachValidationErrorClearListeners() {
+        const seriesSelect = document.getElementById('episode-series-select');
+        const seriesNewInput = document.getElementById('episode-series-new');
+        const topicInput = document.getElementById('episode-topic');
+        const titleInput = document.getElementById('episode-title');
+
+        // Helper function to clear error for a specific field
+        const clearFieldError = (inputElement, errorElementId) => {
+            const errorElement = document.getElementById(errorElementId);
+            if (errorElement) {
+                errorElement.textContent = '';
+            }
+            if (inputElement) {
+                inputElement.classList.remove('error');
+            }
+        };
+
+        // Clear series error when select changes or new series input changes
+        if (seriesSelect) {
+            seriesSelect.addEventListener('change', () => {
+                clearFieldError(seriesSelect, 'series-error');
+                if (seriesNewInput) {
+                    seriesNewInput.classList.remove('error');
+                }
+            });
+        }
+
+        if (seriesNewInput) {
+            seriesNewInput.addEventListener('input', () => {
+                clearFieldError(seriesNewInput, 'series-error');
+                if (seriesSelect) {
+                    seriesSelect.classList.remove('error');
+                }
+            });
+        }
+
+        // Clear topic error when topic input changes
+        if (topicInput) {
+            topicInput.addEventListener('input', () => {
+                clearFieldError(topicInput, 'topic-error');
+            });
+        }
+
+        // Clear title error when title input changes
+        if (titleInput) {
+            titleInput.addEventListener('input', () => {
+                clearFieldError(titleInput, 'title-error');
+            });
+        }
     }
 
     slugify(text) {

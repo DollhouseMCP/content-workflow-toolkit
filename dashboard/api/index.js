@@ -213,7 +213,12 @@ function validateEpisodeUpdate(updates) {
         errors.push('Title must be 200 characters or less');
       } else {
         // Sanitize: trim and remove control characters
-        sanitized.title = updates.title.trim().replace(/[\x00-\x1F\x7F]/g, '');
+        const sanitizedTitle = updates.title.trim().replace(/[\x00-\x1F\x7F]/g, '');
+        if (sanitizedTitle.length === 0) {
+          errors.push('Title cannot be empty after sanitization');
+        } else {
+          sanitized.title = sanitizedTitle;
+        }
       }
       break;
 
@@ -251,15 +256,19 @@ function validateEpisodeUpdate(updates) {
       if (typeof updates.workflow !== 'object' || updates.workflow === null) {
         errors.push('Workflow must be an object');
       } else {
-        sanitized.workflow = {};
+        const workflowUpdates = {};
         for (const wfKey of Object.keys(updates.workflow)) {
           if (!validWorkflowFields.includes(wfKey)) {
             errors.push(`Workflow field '${wfKey}' is not valid`);
           } else if (typeof updates.workflow[wfKey] !== 'boolean') {
             errors.push(`Workflow field '${wfKey}' must be a boolean`);
           } else {
-            sanitized.workflow[wfKey] = updates.workflow[wfKey];
+            workflowUpdates[wfKey] = updates.workflow[wfKey];
           }
+        }
+        // Only add workflow if there are valid fields to update
+        if (Object.keys(workflowUpdates).length > 0) {
+          sanitized.workflow = workflowUpdates;
         }
       }
       break;
@@ -281,7 +290,14 @@ function validateEpisodeUpdate(updates) {
                 if (!dateRegex.test(updates.release.target_date)) {
                   errors.push('Target date must be in YYYY-MM-DD format');
                 } else {
-                  sanitized.release.target_date = updates.release.target_date;
+                  // Validate date is actually valid (e.g., not Feb 30)
+                  const [year, month, day] = updates.release.target_date.split('-').map(Number);
+                  const date = new Date(year, month - 1, day);
+                  if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) {
+                    errors.push('Target date must be a valid date');
+                  } else {
+                    sanitized.release.target_date = updates.release.target_date;
+                  }
                 }
               } else {
                 sanitized.release.target_date = '';

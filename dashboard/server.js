@@ -35,15 +35,18 @@ const server = app.listen(PORT, () => {
 });
 
 // File watcher for live reload
-const watcher = chokidar.watch([
-  path.join(__dirname, '../series'),
-  path.join(__dirname, '../release-queue.yml'),
-  path.join(__dirname, '../distribution-profiles.yml')
-], {
-  ignored: /(^|[\/\\])\../, // ignore dotfiles
-  persistent: true,
-  ignoreInitial: true
-});
+const watcher = chokidar.watch(
+  [
+    path.join(__dirname, '../series'),
+    path.join(__dirname, '../release-queue.yml'),
+    path.join(__dirname, '../distribution-profiles.yml'),
+  ],
+  {
+    ignored: /(^|[\/\\])\../, // ignore dotfiles
+    persistent: true,
+    ignoreInitial: true,
+  }
+);
 
 // Store connected SSE clients for live reload
 const clients = [];
@@ -69,15 +72,19 @@ app.get('/api/events', (req, res) => {
 // Watch for file changes and notify clients
 watcher.on('change', (filepath) => {
   console.log(`File changed: ${filepath}`);
-  clients.forEach(client => {
-    client.write(`data: ${JSON.stringify({ type: 'reload', file: filepath })}\n\n`);
+  clients.forEach((client) => {
+    client.write(
+      `data: ${JSON.stringify({ type: 'reload', file: filepath })}\n\n`
+    );
   });
 });
 
 watcher.on('add', (filepath) => {
   console.log(`File added: ${filepath}`);
-  clients.forEach(client => {
-    client.write(`data: ${JSON.stringify({ type: 'reload', file: filepath })}\n\n`);
+  clients.forEach((client) => {
+    client.write(
+      `data: ${JSON.stringify({ type: 'reload', file: filepath })}\n\n`
+    );
   });
 });
 

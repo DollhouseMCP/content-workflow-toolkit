@@ -31,7 +31,8 @@ const MAX_SERIES_NAME_LENGTH = 100;
 
 // Security: Allowlist for valid slug characters (alphanumeric, hyphens, underscores)
 const VALID_SLUG_REGEX = /^[a-z0-9][a-z0-9-_]*[a-z0-9]$|^[a-z0-9]$/;
-const VALID_SERIES_REGEX = /^[a-zA-Z0-9][a-zA-Z0-9-_ ]*[a-zA-Z0-9]$|^[a-zA-Z0-9]$/;
+const VALID_SERIES_REGEX =
+  /^[a-zA-Z0-9][a-zA-Z0-9-_ ]*[a-zA-Z0-9]$|^[a-zA-Z0-9]$/;
 
 // ============================================
 // Security Configuration for File Uploads
@@ -43,15 +44,41 @@ const VALID_SERIES_REGEX = /^[a-zA-Z0-9][a-zA-Z0-9-_ ]*[a-zA-Z0-9]$|^[a-zA-Z0-9]
 // In this internal content workflow tool, SVGs are only accessible to authorized users.
 const ALLOWED_EXTENSIONS = new Set([
   // Images
-  '.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg', '.bmp', '.ico',
+  '.jpg',
+  '.jpeg',
+  '.png',
+  '.gif',
+  '.webp',
+  '.svg',
+  '.bmp',
+  '.ico',
   // Video
-  '.mp4', '.mov', '.webm', '.avi', '.mkv', '.m4v',
+  '.mp4',
+  '.mov',
+  '.webm',
+  '.avi',
+  '.mkv',
+  '.m4v',
   // Audio
-  '.mp3', '.wav', '.m4a', '.aac', '.ogg', '.flac',
+  '.mp3',
+  '.wav',
+  '.m4a',
+  '.aac',
+  '.ogg',
+  '.flac',
   // Documents
-  '.pdf', '.doc', '.docx', '.txt', '.md', '.rtf',
+  '.pdf',
+  '.doc',
+  '.docx',
+  '.txt',
+  '.md',
+  '.rtf',
   // Data/Config
-  '.json', '.yml', '.yaml', '.csv', '.xml'
+  '.json',
+  '.yml',
+  '.yaml',
+  '.csv',
+  '.xml',
 ]);
 
 // Maximum file size: 100MB
@@ -84,8 +111,10 @@ function isPathWithinAssets(targetPath) {
   // 1. Relative path doesn't start with '..' (would indicate escaping the directory)
   // 2. Relative path isn't an absolute path (edge case on Windows)
   // 3. Relative path is empty string (exact match) or a valid child path
-  return relativePath === '' ||
-         (!relativePath.startsWith('..') && !path.isAbsolute(relativePath));
+  return (
+    relativePath === '' ||
+    (!relativePath.startsWith('..') && !path.isAbsolute(relativePath))
+  );
 }
 
 // Validate file extension
@@ -113,12 +142,15 @@ const storage = multer.diskStorage({
     const ext = path.extname(sanitized);
     const name = path.basename(sanitized, ext);
     cb(null, `${name}-${uniqueSuffix}${ext}`);
-  }
+  },
 });
 
 const fileFilter = function (req, file, cb) {
   if (!isAllowedExtension(file.originalname)) {
-    cb(new Error(`File type not allowed: ${path.extname(file.originalname)}`), false);
+    cb(
+      new Error(`File type not allowed: ${path.extname(file.originalname)}`),
+      false
+    );
     return;
   }
   cb(null, true);
@@ -128,9 +160,9 @@ const upload = multer({
   storage: storage,
   limits: {
     fileSize: MAX_FILE_SIZE,
-    files: 20 // Maximum 20 files at once
+    files: 20, // Maximum 20 files at once
   },
-  fileFilter: fileFilter
+  fileFilter: fileFilter,
 });
 
 // Cached metadata template (loaded once at startup, deep cloned on use)
@@ -148,8 +180,18 @@ async function getMetadataTemplate() {
         title: '',
         description: '',
         distribution: { profile: 'full' },
-        release: { target_date: '', release_group: '', depends_on: [], notes: '' },
-        recording: { date: '', duration_raw: '', duration_final: '', format: '4K' },
+        release: {
+          target_date: '',
+          release_group: '',
+          depends_on: [],
+          notes: '',
+        },
+        recording: {
+          date: '',
+          duration_raw: '',
+          duration_final: '',
+          format: '4K',
+        },
         series: { name: '', episode_number: null },
         workflow: {
           scripted: false,
@@ -157,9 +199,9 @@ async function getMetadataTemplate() {
           edited: false,
           thumbnail_created: false,
           uploaded: false,
-          published: false
+          published: false,
         },
-        analytics: { youtube_id: '', publish_date: '' }
+        analytics: { youtube_id: '', publish_date: '' },
       };
     }
   }
@@ -200,7 +242,8 @@ function isValidSlug(slug) {
   if (!slug || typeof slug !== 'string') return false;
   if (slug.length < 1 || slug.length > MAX_SLUG_LENGTH) return false;
   // Check for path traversal attempts
-  if (slug.includes('..') || slug.includes('/') || slug.includes('\\')) return false;
+  if (slug.includes('..') || slug.includes('/') || slug.includes('\\'))
+    return false;
   return VALID_SLUG_REGEX.test(slug);
 }
 
@@ -209,7 +252,8 @@ function isValidSeriesName(name) {
   if (!name || typeof name !== 'string') return false;
   if (name.length < 1 || name.length > MAX_SERIES_NAME_LENGTH) return false;
   // Check for path traversal attempts
-  if (name.includes('..') || name.includes('/') || name.includes('\\')) return false;
+  if (name.includes('..') || name.includes('/') || name.includes('\\'))
+    return false;
   return VALID_SERIES_REGEX.test(name);
 }
 
@@ -219,11 +263,11 @@ function slugify(text) {
     .toString()
     .toLowerCase()
     .trim()
-    .replace(/\s+/g, '-')           // Replace spaces with -
-    .replace(/[^\w-]+/g, '')        // Remove non-word chars (except -)
-    .replace(/--+/g, '-')           // Replace multiple - with single -
-    .replace(/^-+/, '')             // Trim - from start
-    .replace(/-+$/, '');            // Trim - from end
+    .replace(/\s+/g, '-') // Replace spaces with -
+    .replace(/[^\w-]+/g, '') // Remove non-word chars (except -)
+    .replace(/--+/g, '-') // Replace multiple - with single -
+    .replace(/^-+/, '') // Trim - from start
+    .replace(/-+$/, ''); // Trim - from end
 }
 
 // Helper: Get current date in YYYY-MM-DD format
@@ -254,7 +298,7 @@ async function writeYamlFile(filepath, data) {
       lineWidth: -1,
       noRefs: true,
       quotingType: '"',
-      forceQuotes: false
+      forceQuotes: false,
     });
     await fs.writeFile(filepath, content, 'utf8');
   } catch (error) {
@@ -266,7 +310,11 @@ async function writeYamlFile(filepath, data) {
 // Helper: Deep merge objects (target is modified)
 function deepMerge(target, source) {
   for (const key in source) {
-    if (source[key] && typeof source[key] === 'object' && !Array.isArray(source[key])) {
+    if (
+      source[key] &&
+      typeof source[key] === 'object' &&
+      !Array.isArray(source[key])
+    ) {
       if (!target[key] || typeof target[key] !== 'object') {
         target[key] = {};
       }
@@ -290,17 +338,29 @@ function validateEpisodeUpdate(updates) {
     'content_status',
     'tags',
     'workflow',
-    'release'
+    'release',
   ];
 
   // Allowed content_status values
   const validContentStatuses = ['draft', 'ready', 'staged', 'released'];
 
   // Allowed workflow fields
-  const validWorkflowFields = ['scripted', 'recorded', 'edited', 'thumbnail_created', 'uploaded', 'published'];
+  const validWorkflowFields = [
+    'scripted',
+    'recorded',
+    'edited',
+    'thumbnail_created',
+    'uploaded',
+    'published',
+  ];
 
   // Allowed release fields
-  const validReleaseFields = ['target_date', 'release_group', 'depends_on', 'notes'];
+  const validReleaseFields = [
+    'target_date',
+    'release_group',
+    'depends_on',
+    'notes',
+  ];
 
   for (const key of Object.keys(updates)) {
     if (!allowedFields.includes(key)) {
@@ -316,7 +376,9 @@ function validateEpisodeUpdate(updates) {
         errors.push('Title must be 200 characters or less');
       } else {
         // Sanitize: trim and remove control characters
-        const sanitizedTitle = updates.title.trim().replace(/[\x00-\x1F\x7F]/g, '');
+        const sanitizedTitle = updates.title
+          .trim()
+          .replace(/[\x00-\x1F\x7F]/g, '');
         if (sanitizedTitle.length === 0) {
           errors.push('Title cannot be empty after sanitization');
         } else {
@@ -332,13 +394,17 @@ function validateEpisodeUpdate(updates) {
         errors.push('Description must be 10000 characters or less');
       } else {
         // Sanitize: trim and remove control characters (except newlines)
-        sanitized.description = updates.description.trim().replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
+        sanitized.description = updates.description
+          .trim()
+          .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
       }
       break;
 
     case 'content_status':
       if (!validContentStatuses.includes(updates.content_status)) {
-        errors.push(`Content status must be one of: ${validContentStatuses.join(', ')}`);
+        errors.push(
+          `Content status must be one of: ${validContentStatuses.join(', ')}`
+        );
       } else {
         sanitized.content_status = updates.content_status;
       }
@@ -350,8 +416,13 @@ function validateEpisodeUpdate(updates) {
       } else {
         // Sanitize each tag
         sanitized.tags = updates.tags
-          .filter(tag => typeof tag === 'string' && tag.trim().length > 0)
-          .map(tag => tag.trim().replace(/[\x00-\x1F\x7F]/g, '').substring(0, 100));
+          .filter((tag) => typeof tag === 'string' && tag.trim().length > 0)
+          .map((tag) =>
+            tag
+              .trim()
+              .replace(/[\x00-\x1F\x7F]/g, '')
+              .substring(0, 100)
+          );
       }
       break;
 
@@ -387,19 +458,29 @@ function validateEpisodeUpdate(updates) {
           } else {
             switch (relKey) {
             case 'target_date':
-              if (updates.release.target_date !== null && updates.release.target_date !== '') {
+              if (
+                updates.release.target_date !== null &&
+                    updates.release.target_date !== ''
+              ) {
                 // Validate date format (YYYY-MM-DD)
                 const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
                 if (!dateRegex.test(updates.release.target_date)) {
                   errors.push('Target date must be in YYYY-MM-DD format');
                 } else {
                   // Validate date is actually valid (e.g., not Feb 30)
-                  const [year, month, day] = updates.release.target_date.split('-').map(Number);
+                  const [year, month, day] = updates.release.target_date
+                    .split('-')
+                    .map(Number);
                   const date = new Date(year, month - 1, day);
-                  if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) {
+                  if (
+                    date.getFullYear() !== year ||
+                        date.getMonth() !== month - 1 ||
+                        date.getDate() !== day
+                  ) {
                     errors.push('Target date must be a valid date');
                   } else {
-                    sanitized.release.target_date = updates.release.target_date;
+                    sanitized.release.target_date =
+                          updates.release.target_date;
                   }
                 }
               } else {
@@ -407,16 +488,20 @@ function validateEpisodeUpdate(updates) {
               }
               break;
             case 'release_group':
-              sanitized.release.release_group = String(updates.release.release_group || '').trim();
+              sanitized.release.release_group = String(
+                updates.release.release_group || ''
+              ).trim();
               break;
             case 'notes':
-              sanitized.release.notes = String(updates.release.notes || '').trim().substring(0, 2000);
+              sanitized.release.notes = String(updates.release.notes || '')
+                .trim()
+                .substring(0, 2000);
               break;
             case 'depends_on':
               if (Array.isArray(updates.release.depends_on)) {
                 sanitized.release.depends_on = updates.release.depends_on
-                  .filter(dep => typeof dep === 'string')
-                  .map(dep => dep.trim().substring(0, 200));
+                  .filter((dep) => typeof dep === 'string')
+                  .map((dep) => dep.trim().substring(0, 200));
               }
               break;
             }
@@ -454,7 +539,7 @@ async function scanForEpisodes(dir) {
             path: relativePath,
             series: pathParts[1] || 'unknown',
             episode: entry.name,
-            metadata: metadata
+            metadata: metadata,
           });
         } catch (err) {
           // No metadata.yml, might contain subdirectories
@@ -477,7 +562,7 @@ async function getDirectoryTree(dir, relativeTo = dir) {
     path: path.relative(relativeTo, dir),
     type: 'directory',
     children: [],
-    fileCount: 0
+    fileCount: 0,
   };
 
   try {
@@ -509,7 +594,7 @@ async function getDirectoryTree(dir, relativeTo = dir) {
           ext: ext,
           size: stats.size,
           modified: stats.mtime,
-          dimensions: dimensions
+          dimensions: dimensions,
         });
         tree.fileCount += 1;
       }
@@ -538,12 +623,12 @@ router.get('/episodes', async (req, res) => {
     res.json({
       success: true,
       count: episodes.length,
-      episodes: episodes
+      episodes: episodes,
     });
   } catch (error) {
     res.status(500).json({
       success: false,
-      error: error.message
+      error: error.message,
     });
   }
 });
@@ -572,7 +657,7 @@ router.get('/episodes/:series/:episode', async (req, res) => {
           type: entry.isDirectory() ? 'directory' : 'file',
           size: stats.size,
           modified: stats.mtime,
-          ext: path.extname(entry.name).toLowerCase()
+          ext: path.extname(entry.name).toLowerCase(),
         };
       })
     );
@@ -583,12 +668,12 @@ router.get('/episodes/:series/:episode', async (req, res) => {
       episode: episode,
       path: path.relative(BASE_DIR, episodePath),
       metadata: metadata,
-      files: files
+      files: files,
     });
   } catch (error) {
     res.status(404).json({
       success: false,
-      error: error.message
+      error: error.message,
     });
   }
 });
@@ -600,11 +685,17 @@ router.patch('/episodes/:series/:episode', async (req, res) => {
     const updates = req.body;
 
     // Validate path parameters to prevent directory traversal
-    if (series.includes('..') || series.includes('/') || series.includes('\\') ||
-        episode.includes('..') || episode.includes('/') || episode.includes('\\')) {
+    if (
+      series.includes('..') ||
+      series.includes('/') ||
+      series.includes('\\') ||
+      episode.includes('..') ||
+      episode.includes('/') ||
+      episode.includes('\\')
+    ) {
       return res.status(400).json({
         success: false,
-        error: 'Invalid series or episode name'
+        error: 'Invalid series or episode name',
       });
     }
 
@@ -616,7 +707,7 @@ router.patch('/episodes/:series/:episode', async (req, res) => {
     if (!resolvedPath.startsWith(RESOLVED_SERIES_DIR)) {
       return res.status(400).json({
         success: false,
-        error: 'Invalid path detected'
+        error: 'Invalid path detected',
       });
     }
 
@@ -628,7 +719,7 @@ router.patch('/episodes/:series/:episode', async (req, res) => {
       if (err.code === 'ENOENT') {
         return res.status(404).json({
           success: false,
-          error: 'Episode not found'
+          error: 'Episode not found',
         });
       }
       // Other errors (EACCES, etc.) should be 500
@@ -641,14 +732,14 @@ router.patch('/episodes/:series/:episode', async (req, res) => {
     if (errors.length > 0) {
       return res.status(400).json({
         success: false,
-        errors: errors
+        errors: errors,
       });
     }
 
     if (Object.keys(sanitized).length === 0) {
       return res.status(400).json({
         success: false,
-        error: 'No valid fields to update'
+        error: 'No valid fields to update',
       });
     }
 
@@ -672,7 +763,7 @@ router.patch('/episodes/:series/:episode', async (req, res) => {
           type: entry.isDirectory() ? 'directory' : 'file',
           size: stats.size,
           modified: stats.mtime,
-          ext: path.extname(entry.name).toLowerCase()
+          ext: path.extname(entry.name).toLowerCase(),
         };
       })
     );
@@ -684,13 +775,13 @@ router.patch('/episodes/:series/:episode', async (req, res) => {
       episode: episode,
       path: path.relative(BASE_DIR, episodePath),
       metadata: metadata,
-      files: files
+      files: files,
     });
   } catch (error) {
     console.error('Error updating episode:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to update episode. Please try again.'
+      error: 'Failed to update episode. Please try again.',
     });
   }
 });
@@ -701,12 +792,12 @@ router.get('/releases', async (req, res) => {
     const releaseQueue = await readYamlFile(RELEASE_QUEUE);
     res.json({
       success: true,
-      data: releaseQueue
+      data: releaseQueue,
     });
   } catch (error) {
     res.status(500).json({
       success: false,
-      error: error.message
+      error: error.message,
     });
   }
 });
@@ -717,12 +808,12 @@ router.get('/distribution', async (req, res) => {
     const distributionProfiles = await readYamlFile(DISTRIBUTION_PROFILES);
     res.json({
       success: true,
-      data: distributionProfiles
+      data: distributionProfiles,
     });
   } catch (error) {
     res.status(500).json({
       success: false,
-      error: error.message
+      error: error.message,
     });
   }
 });
@@ -733,12 +824,12 @@ router.get('/assets', async (req, res) => {
     const tree = await getDirectoryTree(ASSETS_DIR, BASE_DIR);
     res.json({
       success: true,
-      data: tree
+      data: tree,
     });
   } catch (error) {
     res.status(500).json({
       success: false,
-      error: error.message
+      error: error.message,
     });
   }
 });
@@ -748,7 +839,7 @@ router.get('/health', (req, res) => {
   res.json({
     success: true,
     status: 'ok',
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
   });
 });
 
@@ -757,18 +848,18 @@ router.get('/series', async (req, res) => {
   try {
     const entries = await fs.readdir(SERIES_DIR, { withFileTypes: true });
     const seriesList = entries
-      .filter(entry => entry.isDirectory())
-      .map(entry => entry.name)
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name)
       .sort();
 
     res.json({
       success: true,
-      series: seriesList
+      series: seriesList,
     });
   } catch (error) {
     res.status(500).json({
       success: false,
-      error: error.message
+      error: error.message,
     });
   }
 });
@@ -779,27 +870,34 @@ router.post('/episodes', async (req, res) => {
   let episodeCreated = false; // Only true after we successfully create the folder
 
   try {
-    const { series, topic, title, description, targetDate, distributionProfile } = req.body;
+    const {
+      series,
+      topic,
+      title,
+      description,
+      targetDate,
+      distributionProfile,
+    } = req.body;
 
     // Validate required fields
     if (!series || typeof series !== 'string') {
       return res.status(400).json({
         success: false,
-        error: 'Series name is required'
+        error: 'Series name is required',
       });
     }
 
     if (!topic || typeof topic !== 'string') {
       return res.status(400).json({
         success: false,
-        error: 'Topic/slug is required'
+        error: 'Topic/slug is required',
       });
     }
 
     if (!title || typeof title !== 'string') {
       return res.status(400).json({
         success: false,
-        error: 'Title is required'
+        error: 'Title is required',
       });
     }
 
@@ -807,14 +905,14 @@ router.post('/episodes', async (req, res) => {
     if (title.length > MAX_TITLE_LENGTH) {
       return res.status(400).json({
         success: false,
-        error: `Title must be ${MAX_TITLE_LENGTH} characters or less`
+        error: `Title must be ${MAX_TITLE_LENGTH} characters or less`,
       });
     }
 
     if (description && description.length > MAX_DESCRIPTION_LENGTH) {
       return res.status(400).json({
         success: false,
-        error: `Description must be ${MAX_DESCRIPTION_LENGTH} characters or less`
+        error: `Description must be ${MAX_DESCRIPTION_LENGTH} characters or less`,
       });
     }
 
@@ -823,7 +921,8 @@ router.post('/episodes', async (req, res) => {
     if (!isValidSlug(slug)) {
       return res.status(400).json({
         success: false,
-        error: 'Invalid topic/slug. Use only lowercase letters, numbers, hyphens, and underscores.'
+        error:
+          'Invalid topic/slug. Use only lowercase letters, numbers, hyphens, and underscores.',
       });
     }
 
@@ -832,7 +931,8 @@ router.post('/episodes', async (req, res) => {
     if (!isValidSeriesName(seriesName)) {
       return res.status(400).json({
         success: false,
-        error: 'Invalid series name. Use only letters, numbers, spaces, hyphens, and underscores.'
+        error:
+          'Invalid series name. Use only letters, numbers, spaces, hyphens, and underscores.',
       });
     }
 
@@ -843,7 +943,7 @@ router.post('/episodes', async (req, res) => {
     if (!sanitizedTitle) {
       return res.status(400).json({
         success: false,
-        error: 'Title cannot be empty after removing HTML tags'
+        error: 'Title cannot be empty after removing HTML tags',
       });
     }
 
@@ -858,19 +958,21 @@ router.post('/episodes', async (req, res) => {
       if (!dateRegex.test(targetDate)) {
         return res.status(400).json({
           success: false,
-          error: 'Invalid target date format. Use YYYY-MM-DD.'
+          error: 'Invalid target date format. Use YYYY-MM-DD.',
         });
       }
       // Validate it's a real date (not just valid format)
       // Parse and verify the date components match what was provided
       const [year, month, day] = targetDate.split('-').map(Number);
       const parsedDate = new Date(year, month - 1, day);
-      if (parsedDate.getFullYear() !== year ||
-          parsedDate.getMonth() !== month - 1 ||
-          parsedDate.getDate() !== day) {
+      if (
+        parsedDate.getFullYear() !== year ||
+        parsedDate.getMonth() !== month - 1 ||
+        parsedDate.getDate() !== day
+      ) {
         return res.status(400).json({
           success: false,
-          error: 'Invalid target date.'
+          error: 'Invalid target date.',
         });
       }
     }
@@ -881,17 +983,20 @@ router.post('/episodes', async (req, res) => {
         const profiles = await getDistributionProfiles();
         const validProfiles = Object.keys(profiles.profiles || {});
         // Only validate if profiles exist; empty profiles means accept any
-        if (validProfiles.length > 0 && !validProfiles.includes(distributionProfile)) {
+        if (
+          validProfiles.length > 0 &&
+          !validProfiles.includes(distributionProfile)
+        ) {
           return res.status(400).json({
             success: false,
-            error: `Invalid distribution profile. Valid options: ${validProfiles.join(', ')}`
+            error: `Invalid distribution profile. Valid options: ${validProfiles.join(', ')}`,
           });
         }
       } catch (err) {
         console.error('Error reading distribution profiles:', err.message);
         return res.status(500).json({
           success: false,
-          error: 'Failed to validate distribution profile'
+          error: 'Failed to validate distribution profile',
         });
       }
     }
@@ -908,7 +1013,7 @@ router.post('/episodes', async (req, res) => {
     if (!resolvedEpisodePath.startsWith(RESOLVED_SERIES_DIR)) {
       return res.status(400).json({
         success: false,
-        error: 'Invalid path detected'
+        error: 'Invalid path detected',
       });
     }
 
@@ -924,7 +1029,7 @@ router.post('/episodes', async (req, res) => {
       if (err.code === 'EEXIST') {
         return res.status(409).json({
           success: false,
-          error: `Episode folder already exists: ${episodeFolderName}`
+          error: `Episode folder already exists: ${episodeFolderName}`,
         });
       }
       throw err; // Re-throw other errors
@@ -936,7 +1041,7 @@ router.post('/episodes', async (req, res) => {
       fs.mkdir(path.join(episodePath, 'raw', 'screen'), { recursive: true }),
       fs.mkdir(path.join(episodePath, 'audio'), { recursive: true }),
       fs.mkdir(path.join(episodePath, 'assets'), { recursive: true }),
-      fs.mkdir(path.join(episodePath, 'exports'), { recursive: true })
+      fs.mkdir(path.join(episodePath, 'exports'), { recursive: true }),
     ]);
 
     // Get metadata template (cached for performance)
@@ -968,12 +1073,18 @@ router.post('/episodes', async (req, res) => {
     }
 
     // Write metadata using YAML dump for proper formatting
-    const metadataContent = '# Episode Metadata\n' + yaml.dump(metadata, {
-      lineWidth: -1,  // Don't wrap lines
-      quotingType: '"',
-      forceQuotes: false
-    });
-    await fs.writeFile(path.join(episodePath, 'metadata.yml'), metadataContent, 'utf8');
+    const metadataContent =
+      '# Episode Metadata\n' +
+      yaml.dump(metadata, {
+        lineWidth: -1, // Don't wrap lines
+        quotingType: '"',
+        forceQuotes: false,
+      });
+    await fs.writeFile(
+      path.join(episodePath, 'metadata.yml'),
+      metadataContent,
+      'utf8'
+    );
 
     // Copy script template
     const scriptTemplatePath = path.join(TEMPLATES_DIR, 'script-template.md');
@@ -983,7 +1094,11 @@ router.post('/episodes', async (req, res) => {
       scriptContent = scriptContent.replace('[Video Title]', sanitizedTitle);
       scriptContent = scriptContent.replace('[Series Name]', seriesName);
       scriptContent = scriptContent.replace('[Number/Date]', date);
-      await fs.writeFile(path.join(episodePath, 'script.md'), scriptContent, 'utf8');
+      await fs.writeFile(
+        path.join(episodePath, 'script.md'),
+        scriptContent,
+        'utf8'
+      );
     } catch (err) {
       // If template doesn't exist, create basic script file
       const basicScript = `# ${sanitizedTitle}
@@ -1004,7 +1119,11 @@ router.post('/episodes', async (req, res) => {
 
 ## Call to Action
 `;
-      await fs.writeFile(path.join(episodePath, 'script.md'), basicScript, 'utf8');
+      await fs.writeFile(
+        path.join(episodePath, 'script.md'),
+        basicScript,
+        'utf8'
+      );
     }
 
     // Create notes.md
@@ -1034,7 +1153,11 @@ router.post('/episodes', async (req, res) => {
 | Avg Duration | | | |
 
 `;
-    await fs.writeFile(path.join(episodePath, 'notes.md'), notesContent, 'utf8');
+    await fs.writeFile(
+      path.join(episodePath, 'notes.md'),
+      notesContent,
+      'utf8'
+    );
 
     // Return success with created episode data
     res.status(201).json({
@@ -1047,10 +1170,9 @@ router.post('/episodes', async (req, res) => {
         title: sanitizedTitle,
         description: sanitizedDescription,
         targetDate: targetDate || null,
-        distributionProfile: distributionProfile || 'full'
-      }
+        distributionProfile: distributionProfile || 'full',
+      },
     });
-
   } catch (error) {
     // Log full error details server-side only
     console.error('Error creating episode:', error);
@@ -1063,7 +1185,7 @@ router.post('/episodes', async (req, res) => {
     // Return generic error message to client (don't leak internal paths/details)
     res.status(500).json({
       success: false,
-      error: 'Failed to create episode. Please try again.'
+      error: 'Failed to create episode. Please try again.',
     });
   }
 });
@@ -1087,7 +1209,7 @@ router.post('/assets/upload', upload.array('files', 20), async (req, res) => {
       }
       return res.status(400).json({
         success: false,
-        error: 'Invalid target folder path'
+        error: 'Invalid target folder path',
       });
     }
 
@@ -1109,7 +1231,9 @@ router.post('/assets/upload', upload.array('files', 20), async (req, res) => {
       try {
         await fs.access(finalPath);
         // File exists - this is unexpected with random suffix
-        throw Object.assign(new Error('File already exists at destination'), { code: 'EEXIST' });
+        throw Object.assign(new Error('File already exists at destination'), {
+          code: 'EEXIST',
+        });
       } catch (err) {
         if (err.code !== 'ENOENT') {
           throw err; // Re-throw if not "file doesn't exist"
@@ -1129,16 +1253,15 @@ router.post('/assets/upload', upload.array('files', 20), async (req, res) => {
         originalName: file.originalname,
         path: path.relative(ASSETS_DIR, finalPath),
         size: stats.size,
-        type: file.mimetype
+        type: file.mimetype,
       });
     }
 
     res.json({
       success: true,
       files: uploadedFiles,
-      message: `Successfully uploaded ${uploadedFiles.length} file(s)`
+      message: `Successfully uploaded ${uploadedFiles.length} file(s)`,
     });
-
   } catch (error) {
     // Clean up files that were moved to target directory
     for (const movedPath of movedFiles) {
@@ -1154,19 +1277,19 @@ router.post('/assets/upload', upload.array('files', 20), async (req, res) => {
     if (error.code === 'ENOSPC') {
       return res.status(507).json({
         success: false,
-        error: 'Insufficient storage space'
+        error: 'Insufficient storage space',
       });
     }
     if (error.code === 'EACCES') {
       return res.status(500).json({
         success: false,
-        error: 'Permission denied'
+        error: 'Permission denied',
       });
     }
 
     res.status(500).json({
       success: false,
-      error: 'An internal error occurred during upload'
+      error: 'An internal error occurred during upload',
     });
   }
 });
@@ -1179,7 +1302,7 @@ router.post('/assets/folder', async (req, res) => {
     if (!name || typeof name !== 'string') {
       return res.status(400).json({
         success: false,
-        error: 'Folder name is required'
+        error: 'Folder name is required',
       });
     }
 
@@ -1193,7 +1316,7 @@ router.post('/assets/folder', async (req, res) => {
     if (!sanitizedName) {
       return res.status(400).json({
         success: false,
-        error: 'Invalid folder name'
+        error: 'Invalid folder name',
       });
     }
 
@@ -1204,7 +1327,7 @@ router.post('/assets/folder', async (req, res) => {
     if (!isPathWithinAssets(newFolderPath)) {
       return res.status(400).json({
         success: false,
-        error: 'Invalid folder path'
+        error: 'Invalid folder path',
       });
     }
 
@@ -1222,7 +1345,7 @@ router.post('/assets/folder', async (req, res) => {
       if (mkdirError.code === 'EEXIST') {
         return res.status(400).json({
           success: false,
-          error: 'Folder already exists'
+          error: 'Folder already exists',
         });
       }
       throw mkdirError;
@@ -1232,16 +1355,15 @@ router.post('/assets/folder', async (req, res) => {
       success: true,
       folder: {
         name: sanitizedName,
-        path: newFolderPath
+        path: newFolderPath,
       },
-      message: `Folder "${sanitizedName}" created successfully`
+      message: `Folder "${sanitizedName}" created successfully`,
     });
-
   } catch (error) {
     console.error('Create folder error:', error);
     res.status(500).json({
       success: false,
-      error: 'An internal error occurred while creating folder'
+      error: 'An internal error occurred while creating folder',
     });
   }
 });
@@ -1255,7 +1377,7 @@ router.delete('/assets/*', async (req, res) => {
     if (!assetPath) {
       return res.status(400).json({
         success: false,
-        error: 'Path is required'
+        error: 'Path is required',
       });
     }
 
@@ -1263,7 +1385,7 @@ router.delete('/assets/*', async (req, res) => {
     if (!isPathWithinAssets(assetPath)) {
       return res.status(400).json({
         success: false,
-        error: 'Invalid path'
+        error: 'Invalid path',
       });
     }
 
@@ -1272,7 +1394,7 @@ router.delete('/assets/*', async (req, res) => {
     if (path.resolve(fullPath) === path.resolve(ASSETS_DIR)) {
       return res.status(400).json({
         success: false,
-        error: 'Cannot delete the root assets folder'
+        error: 'Cannot delete the root assets folder',
       });
     }
 
@@ -1282,7 +1404,7 @@ router.delete('/assets/*', async (req, res) => {
     } catch {
       return res.status(404).json({
         success: false,
-        error: 'File or folder not found'
+        error: 'File or folder not found',
       });
     }
 
@@ -1299,14 +1421,13 @@ router.delete('/assets/*', async (req, res) => {
 
     res.json({
       success: true,
-      message: `Successfully deleted: ${assetPath}`
+      message: `Successfully deleted: ${assetPath}`,
     });
-
   } catch (error) {
     console.error('Delete error:', error);
     res.status(500).json({
       success: false,
-      error: 'An internal error occurred during delete operation'
+      error: 'An internal error occurred during delete operation',
     });
   }
 });
@@ -1321,14 +1442,14 @@ router.patch('/assets/*', async (req, res) => {
     if (!currentPath) {
       return res.status(400).json({
         success: false,
-        error: 'Current path is required'
+        error: 'Current path is required',
       });
     }
 
     if (!newPath || typeof newPath !== 'string') {
       return res.status(400).json({
         success: false,
-        error: 'New path is required'
+        error: 'New path is required',
       });
     }
 
@@ -1336,20 +1457,23 @@ router.patch('/assets/*', async (req, res) => {
     const newPathDir = path.dirname(newPath);
     const newPathFilename = path.basename(newPath);
     const sanitizedFilename = sanitizeFilename(newPathFilename);
-    const sanitizedNewPath = newPathDir === '.' ? sanitizedFilename : path.join(newPathDir, sanitizedFilename);
+    const sanitizedNewPath =
+      newPathDir === '.'
+        ? sanitizedFilename
+        : path.join(newPathDir, sanitizedFilename);
 
     // Security: Validate both paths are within assets directory
     if (!isPathWithinAssets(currentPath)) {
       return res.status(400).json({
         success: false,
-        error: 'Invalid current path'
+        error: 'Invalid current path',
       });
     }
 
     if (!isPathWithinAssets(sanitizedNewPath)) {
       return res.status(400).json({
         success: false,
-        error: 'Invalid new path'
+        error: 'Invalid new path',
       });
     }
 
@@ -1360,7 +1484,7 @@ router.patch('/assets/*', async (req, res) => {
     if (path.resolve(fullCurrentPath) === path.resolve(ASSETS_DIR)) {
       return res.status(400).json({
         success: false,
-        error: 'Cannot rename the root assets folder'
+        error: 'Cannot rename the root assets folder',
       });
     }
 
@@ -1370,7 +1494,7 @@ router.patch('/assets/*', async (req, res) => {
     } catch {
       return res.status(404).json({
         success: false,
-        error: 'Source file or folder not found'
+        error: 'Source file or folder not found',
       });
     }
 
@@ -1388,7 +1512,7 @@ router.patch('/assets/*', async (req, res) => {
       if (destStats) {
         return res.status(400).json({
           success: false,
-          error: 'Destination already exists'
+          error: 'Destination already exists',
         });
       }
       await fs.rename(fullCurrentPath, fullNewPath);
@@ -1396,7 +1520,7 @@ router.patch('/assets/*', async (req, res) => {
       if (renameError.code === 'EEXIST') {
         return res.status(400).json({
           success: false,
-          error: 'Destination already exists'
+          error: 'Destination already exists',
         });
       }
       throw renameError;
@@ -1406,14 +1530,13 @@ router.patch('/assets/*', async (req, res) => {
       success: true,
       oldPath: currentPath,
       newPath: sanitizedNewPath,
-      message: `Successfully renamed/moved to: ${sanitizedNewPath}`
+      message: `Successfully renamed/moved to: ${sanitizedNewPath}`,
     });
-
   } catch (error) {
     console.error('Rename/move error:', error);
     res.status(500).json({
       success: false,
-      error: 'An internal error occurred during rename/move operation'
+      error: 'An internal error occurred during rename/move operation',
     });
   }
 });
@@ -1424,24 +1547,24 @@ router.use((error, req, res, next) => {
     if (error.code === 'LIMIT_FILE_SIZE') {
       return res.status(400).json({
         success: false,
-        error: `File too large. Maximum size is ${MAX_FILE_SIZE / (1024 * 1024)}MB`
+        error: `File too large. Maximum size is ${MAX_FILE_SIZE / (1024 * 1024)}MB`,
       });
     }
     if (error.code === 'LIMIT_FILE_COUNT') {
       return res.status(400).json({
         success: false,
-        error: 'Too many files. Maximum is 20 files at once'
+        error: 'Too many files. Maximum is 20 files at once',
       });
     }
     return res.status(400).json({
       success: false,
-      error: error.message
+      error: error.message,
     });
   }
   if (error) {
     return res.status(400).json({
       success: false,
-      error: error.message
+      error: error.message,
     });
   }
   next();

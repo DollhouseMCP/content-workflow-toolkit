@@ -40,12 +40,14 @@ The dashboard will be available at http://localhost:3000
 ## Media Files
 
 Media files are served from:
+
 - `/media/series/*` - Series content files
 - `/media/assets/*` - Asset files
 
 ## File Watching
 
 The server watches the following for changes:
+
 - `series/` directory
 - `release-queue.yml`
 - `distribution-profiles.yml`

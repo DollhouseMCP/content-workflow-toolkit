@@ -9,18 +9,24 @@
     "dev": "node server.js",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
     "test": "node --test"
   },
-  "keywords": ["content", "dashboard", "workflow"],
+  "keywords": [
+    "content",
+    "dashboard",
+    "workflow"
+  ],
   "author": "",
   "license": "MIT",
   "dependencies": {
+    "chokidar": "^3.5.3",
     "express": "^4.18.2",
     "js-yaml": "^4.1.0",
-    "chokidar": "^3.5.3",
     "multer": "^2.0.2"
   },
   "devDependencies": {
-    "eslint": "^8.57.0"
+    "eslint": "^8.57.0",
+    "prettier": "^3.7.4"
   }
 }

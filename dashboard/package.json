@@ -9,7 +9,9 @@
     "dev": "node server.js",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
-    "test": "node --test"
+    "test": "node --test",
+    "audit": "npm audit",
+    "audit:fix": "npm audit fix"
   },
   "keywords": ["content", "dashboard", "workflow"],
   "author": "",

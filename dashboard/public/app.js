@@ -2570,6 +2570,9 @@ class Dashboard {
             modal.remove();
         }
 
+        // Clean up status dropdown listeners to prevent memory leak
+        this.closeStatusDropdowns();
+
         // Remove keyboard listener
         if (this._modalKeyHandler) {
             document.removeEventListener('keydown', this._modalKeyHandler);

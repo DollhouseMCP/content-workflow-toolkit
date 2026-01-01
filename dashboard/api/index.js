@@ -206,105 +206,105 @@ function validateEpisodeUpdate(updates) {
     }
 
     switch (key) {
-      case 'title':
-        if (typeof updates.title !== 'string') {
-          errors.push('Title must be a string');
-        } else if (updates.title.length > 200) {
-          errors.push('Title must be 200 characters or less');
-        } else {
-          // Sanitize: trim and remove control characters
-          sanitized.title = updates.title.trim().replace(/[\x00-\x1F\x7F]/g, '');
-        }
-        break;
+    case 'title':
+      if (typeof updates.title !== 'string') {
+        errors.push('Title must be a string');
+      } else if (updates.title.length > 200) {
+        errors.push('Title must be 200 characters or less');
+      } else {
+        // Sanitize: trim and remove control characters
+        sanitized.title = updates.title.trim().replace(/[\x00-\x1F\x7F]/g, '');
+      }
+      break;
 
-      case 'description':
-        if (typeof updates.description !== 'string') {
-          errors.push('Description must be a string');
-        } else if (updates.description.length > 10000) {
-          errors.push('Description must be 10000 characters or less');
-        } else {
-          // Sanitize: trim and remove control characters (except newlines)
-          sanitized.description = updates.description.trim().replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
-        }
-        break;
+    case 'description':
+      if (typeof updates.description !== 'string') {
+        errors.push('Description must be a string');
+      } else if (updates.description.length > 10000) {
+        errors.push('Description must be 10000 characters or less');
+      } else {
+        // Sanitize: trim and remove control characters (except newlines)
+        sanitized.description = updates.description.trim().replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
+      }
+      break;
 
-      case 'content_status':
-        if (!validContentStatuses.includes(updates.content_status)) {
-          errors.push(`Content status must be one of: ${validContentStatuses.join(', ')}`);
-        } else {
-          sanitized.content_status = updates.content_status;
-        }
-        break;
+    case 'content_status':
+      if (!validContentStatuses.includes(updates.content_status)) {
+        errors.push(`Content status must be one of: ${validContentStatuses.join(', ')}`);
+      } else {
+        sanitized.content_status = updates.content_status;
+      }
+      break;
 
-      case 'tags':
-        if (!Array.isArray(updates.tags)) {
-          errors.push('Tags must be an array');
-        } else {
-          // Sanitize each tag
-          sanitized.tags = updates.tags
-            .filter(tag => typeof tag === 'string' && tag.trim().length > 0)
-            .map(tag => tag.trim().replace(/[\x00-\x1F\x7F]/g, '').substring(0, 100));
-        }
-        break;
+    case 'tags':
+      if (!Array.isArray(updates.tags)) {
+        errors.push('Tags must be an array');
+      } else {
+        // Sanitize each tag
+        sanitized.tags = updates.tags
+          .filter(tag => typeof tag === 'string' && tag.trim().length > 0)
+          .map(tag => tag.trim().replace(/[\x00-\x1F\x7F]/g, '').substring(0, 100));
+      }
+      break;
 
-      case 'workflow':
-        if (typeof updates.workflow !== 'object' || updates.workflow === null) {
-          errors.push('Workflow must be an object');
-        } else {
-          sanitized.workflow = {};
-          for (const wfKey of Object.keys(updates.workflow)) {
-            if (!validWorkflowFields.includes(wfKey)) {
-              errors.push(`Workflow field '${wfKey}' is not valid`);
-            } else if (typeof updates.workflow[wfKey] !== 'boolean') {
-              errors.push(`Workflow field '${wfKey}' must be a boolean`);
-            } else {
-              sanitized.workflow[wfKey] = updates.workflow[wfKey];
-            }
+    case 'workflow':
+      if (typeof updates.workflow !== 'object' || updates.workflow === null) {
+        errors.push('Workflow must be an object');
+      } else {
+        sanitized.workflow = {};
+        for (const wfKey of Object.keys(updates.workflow)) {
+          if (!validWorkflowFields.includes(wfKey)) {
+            errors.push(`Workflow field '${wfKey}' is not valid`);
+          } else if (typeof updates.workflow[wfKey] !== 'boolean') {
+            errors.push(`Workflow field '${wfKey}' must be a boolean`);
+          } else {
+            sanitized.workflow[wfKey] = updates.workflow[wfKey];
           }
         }
-        break;
+      }
+      break;
 
-      case 'release':
-        if (typeof updates.release !== 'object' || updates.release === null) {
-          errors.push('Release must be an object');
-        } else {
-          sanitized.release = {};
-          for (const relKey of Object.keys(updates.release)) {
-            if (!validReleaseFields.includes(relKey)) {
-              errors.push(`Release field '${relKey}' is not valid`);
-            } else {
-              switch (relKey) {
-                case 'target_date':
-                  if (updates.release.target_date !== null && updates.release.target_date !== '') {
-                    // Validate date format (YYYY-MM-DD)
-                    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
-                    if (!dateRegex.test(updates.release.target_date)) {
-                      errors.push('Target date must be in YYYY-MM-DD format');
-                    } else {
-                      sanitized.release.target_date = updates.release.target_date;
-                    }
-                  } else {
-                    sanitized.release.target_date = '';
-                  }
-                  break;
-                case 'release_group':
-                  sanitized.release.release_group = String(updates.release.release_group || '').trim();
-                  break;
-                case 'notes':
-                  sanitized.release.notes = String(updates.release.notes || '').trim().substring(0, 2000);
-                  break;
-                case 'depends_on':
-                  if (Array.isArray(updates.release.depends_on)) {
-                    sanitized.release.depends_on = updates.release.depends_on
-                      .filter(dep => typeof dep === 'string')
-                      .map(dep => dep.trim().substring(0, 200));
-                  }
-                  break;
+    case 'release':
+      if (typeof updates.release !== 'object' || updates.release === null) {
+        errors.push('Release must be an object');
+      } else {
+        sanitized.release = {};
+        for (const relKey of Object.keys(updates.release)) {
+          if (!validReleaseFields.includes(relKey)) {
+            errors.push(`Release field '${relKey}' is not valid`);
+          } else {
+            switch (relKey) {
+            case 'target_date':
+              if (updates.release.target_date !== null && updates.release.target_date !== '') {
+                // Validate date format (YYYY-MM-DD)
+                const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+                if (!dateRegex.test(updates.release.target_date)) {
+                  errors.push('Target date must be in YYYY-MM-DD format');
+                } else {
+                  sanitized.release.target_date = updates.release.target_date;
+                }
+              } else {
+                sanitized.release.target_date = '';
               }
+              break;
+            case 'release_group':
+              sanitized.release.release_group = String(updates.release.release_group || '').trim();
+              break;
+            case 'notes':
+              sanitized.release.notes = String(updates.release.notes || '').trim().substring(0, 2000);
+              break;
+            case 'depends_on':
+              if (Array.isArray(updates.release.depends_on)) {
+                sanitized.release.depends_on = updates.release.depends_on
+                  .filter(dep => typeof dep === 'string')
+                  .map(dep => dep.trim().substring(0, 200));
+              }
+              break;
             }
           }
         }
-        break;
+      }
+      break;
     }
   }
 
@@ -492,15 +492,28 @@ router.patch('/episodes/:series/:episode', async (req, res) => {
     const episodePath = path.join(SERIES_DIR, series, episode);
     const metadataPath = path.join(episodePath, 'metadata.yml');
 
+    // Additional security: verify resolved path is within SERIES_DIR
+    const resolvedPath = path.resolve(episodePath);
+    if (!resolvedPath.startsWith(RESOLVED_SERIES_DIR)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid path detected'
+      });
+    }
+
     // Check if episode exists
     try {
       await fs.access(episodePath);
       await fs.access(metadataPath);
-    } catch {
-      return res.status(404).json({
-        success: false,
-        error: 'Episode not found'
-      });
+    } catch (err) {
+      if (err.code === 'ENOENT') {
+        return res.status(404).json({
+          success: false,
+          error: 'Episode not found'
+        });
+      }
+      // Other errors (EACCES, etc.) should be 500
+      throw err;
     }
 
     // Validate and sanitize updates
@@ -558,7 +571,7 @@ router.patch('/episodes/:series/:episode', async (req, res) => {
     console.error('Error updating episode:', error);
     res.status(500).json({
       success: false,
-      error: error.message
+      error: 'Failed to update episode. Please try again.'
     });
   }
 });

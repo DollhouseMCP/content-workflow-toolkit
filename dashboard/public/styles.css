@@ -2460,3 +2460,322 @@ input[type="date"].edit-field::-webkit-calendar-picker-indicator {
         transform: rotate(360deg);
     }
 }
+
+/* ============================================
+   Asset Management Styles
+   ============================================ */
+
+/* Asset Browser Toolbar */
+.asset-browser-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+    padding: 1rem;
+    background-color: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.toolbar-left {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+}
+
+.toolbar-right {
+    display: flex;
+    align-items: center;
+}
+
+.toolbar-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.625rem 1.25rem;
+    background-color: var(--background);
+    border: 1px solid var(--border);
+    color: var(--text-primary);
+    border-radius: 6px;
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.toolbar-btn:hover {
+    background-color: var(--surface-hover);
+    border-color: var(--primary-color);
+}
+
+.toolbar-btn.primary {
+    background-color: var(--primary-color);
+    border-color: var(--primary-color);
+    color: white;
+}
+
+.toolbar-btn.primary:hover {
+    background-color: #1d4ed8;
+    border-color: #1d4ed8;
+}
+
+.toolbar-btn .btn-icon {
+    font-size: 1rem;
+    font-weight: 700;
+}
+
+.current-folder-path {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    background-color: var(--background);
+    padding: 0.5rem 1rem;
+    border-radius: 4px;
+    font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
+    max-width: 400px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Upload Dropzone Overlay */
+.upload-dropzone-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(37, 99, 235, 0.1);
+    backdrop-filter: blur(2px);
+    z-index: 100;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+}
+
+.upload-dropzone-overlay.active {
+    display: flex;
+    pointer-events: auto;
+}
+
+.dropzone-content {
+    background-color: var(--surface);
+    border: 3px dashed var(--primary-color);
+    border-radius: 16px;
+    padding: 4rem 6rem;
+    text-align: center;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+.dropzone-icon {
+    font-size: 4rem;
+    color: var(--primary-color);
+    margin-bottom: 1rem;
+    font-weight: 700;
+}
+
+.dropzone-content p {
+    font-size: 1.25rem;
+    color: var(--text-primary);
+    margin-bottom: 0.5rem;
+}
+
+.dropzone-hint {
+    font-size: 0.875rem !important;
+    color: var(--text-secondary) !important;
+}
+
+.dropzone-hint span {
+    color: var(--primary-color);
+    font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
+}
+
+/* Upload Progress */
+.upload-progress-container {
+    margin-bottom: 1rem;
+    padding: 1rem;
+    background-color: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+}
+
+.upload-progress-bar {
+    height: 8px;
+    background-color: var(--background);
+    border-radius: 4px;
+    overflow: hidden;
+    margin-bottom: 0.5rem;
+}
+
+.upload-progress-fill {
+    height: 100%;
+    background-color: var(--primary-color);
+    border-radius: 4px;
+    transition: width 0.3s ease;
+    width: 0%;
+}
+
+.upload-progress-text {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    text-align: center;
+}
+
+/* Context Menu */
+.asset-context-menu {
+    position: fixed;
+    background-color: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+    z-index: 1000;
+    min-width: 160px;
+    overflow: hidden;
+}
+
+.context-menu-item {
+    padding: 0.75rem 1rem;
+    font-size: 0.875rem;
+    color: var(--text-primary);
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.context-menu-item:hover {
+    background-color: var(--surface-hover);
+}
+
+.context-menu-item[data-action="delete"] {
+    color: var(--error);
+}
+
+.context-menu-item[data-action="delete"]:hover {
+    background-color: rgba(239, 68, 68, 0.1);
+}
+
+/* Form Elements for Modals */
+.form-group {
+    margin-bottom: 1.5rem;
+}
+
+.form-label {
+    display: block;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--text-primary);
+    margin-bottom: 0.5rem;
+}
+
+.form-input {
+    width: 100%;
+    padding: 0.75rem 1rem;
+    background-color: var(--background);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text-primary);
+    font-size: 0.875rem;
+    transition: all 0.2s;
+}
+
+.form-input:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+.form-input::placeholder {
+    color: var(--text-secondary);
+}
+
+.form-hint {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    margin-top: 0.5rem;
+}
+
+.form-actions {
+    display: flex;
+    gap: 0.75rem;
+    justify-content: flex-end;
+}
+
+/* Delete Modal Styles */
+.delete-warning {
+    text-align: center;
+    padding: 1rem 0;
+}
+
+.delete-warning p {
+    margin-bottom: 0.75rem;
+    color: var(--text-secondary);
+}
+
+.delete-path {
+    font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
+    font-size: 0.875rem;
+    background-color: var(--background);
+    padding: 0.75rem 1rem;
+    border-radius: 6px;
+    margin: 1rem 0;
+}
+
+.delete-path strong {
+    color: var(--error);
+}
+
+.delete-note {
+    color: var(--warning) !important;
+    font-size: 0.875rem;
+}
+
+/* Highlight selected folder in tree */
+.asset-tree-directory.selected-folder {
+    background-color: rgba(37, 99, 235, 0.1);
+}
+
+/* Responsive adjustments for Asset Browser */
+@media (max-width: 768px) {
+    .asset-browser-toolbar {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .toolbar-left,
+    .toolbar-right {
+        width: 100%;
+    }
+
+    .toolbar-right {
+        justify-content: center;
+    }
+
+    .current-folder-path {
+        max-width: 100%;
+        text-align: center;
+    }
+
+    .dropzone-content {
+        padding: 2rem 3rem;
+    }
+
+    .dropzone-icon {
+        font-size: 3rem;
+    }
+
+    .dropzone-content p {
+        font-size: 1rem;
+    }
+
+    .form-actions {
+        flex-direction: column;
+    }
+
+    .form-actions .btn {
+        width: 100%;
+    }
+}

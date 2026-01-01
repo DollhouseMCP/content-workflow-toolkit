@@ -13,7 +13,17 @@ const DASHBOARD_CONFIG = {
 
     // File size display
     FILE_SIZE_UNIT: 1024,
-    FILE_SIZE_LABELS: ['Bytes', 'KB', 'MB', 'GB']
+    FILE_SIZE_LABELS: ['Bytes', 'KB', 'MB', 'GB'],
+
+    // Asset management
+    MAX_UPLOAD_SIZE_MB: 100,
+    ALLOWED_UPLOAD_EXTENSIONS: [
+        '.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg', '.bmp', '.ico',
+        '.mp4', '.mov', '.webm', '.avi', '.mkv', '.m4v',
+        '.mp3', '.wav', '.m4a', '.aac', '.ogg', '.flac',
+        '.pdf', '.doc', '.docx', '.txt', '.md', '.rtf',
+        '.json', '.yml', '.yaml', '.csv', '.xml'
+    ]
 };
 
 class Dashboard {
@@ -1690,18 +1700,41 @@ class Dashboard {
             this.assetBrowserState = {
                 expandedFolders: new Set(['assets', 'assets/branding', 'assets/music', 'assets/thumbnails', 'assets/sound-effects']),
                 selectedFile: null,
+                selectedFolder: 'assets',
                 searchQuery: '',
-                filterType: 'all'
+                filterType: 'all',
+                isUploading: false,
+                uploadProgress: 0,
+                contextMenu: null
             };
         }
 
-        const treeData = result.data;
+        // Store tree data for later use
+        this._assetTreeData = result.data;
 
         content.innerHTML = `
             <div class="view">
                 <div class="section-header">
                     <h2>Asset Browser</h2>
                     <p>Browse and preview media assets</p>
+                </div>
+
+                <div class="asset-browser-toolbar">
+                    <div class="toolbar-left">
+                        <button class="toolbar-btn primary" id="upload-btn">
+                            <span class="btn-icon">+</span>
+                            Upload Files
+                        </button>
+                        <button class="toolbar-btn" id="new-folder-btn">
+                            <span class="btn-icon">+</span>
+                            New Folder
+                        </button>
+                    </div>
+                    <div class="toolbar-right">
+                        <span class="current-folder-path" id="current-folder-path">
+                            ${this.escapeHtml(this.assetBrowserState.selectedFolder || 'assets')}
+                        </span>
+                    </div>
                 </div>
 
                 <div class="asset-browser-controls">
@@ -1720,13 +1753,33 @@ class Dashboard {
                     </div>
                 </div>
 
-                <div class="asset-browser-layout">
+                <!-- Hidden file input for upload -->
+                <input type="file" id="file-upload-input" multiple style="display: none;">
+
+                <!-- Upload dropzone overlay -->
+                <div class="upload-dropzone-overlay" id="upload-dropzone-overlay">
+                    <div class="dropzone-content">
+                        <div class="dropzone-icon">+</div>
+                        <p>Drop files here to upload</p>
+                        <p class="dropzone-hint">to: <span id="dropzone-target-folder">${this.escapeHtml(this.assetBrowserState.selectedFolder || 'assets')}</span></p>
+                    </div>
+                </div>
+
+                <!-- Upload progress indicator -->
+                <div class="upload-progress-container" id="upload-progress-container" style="display: none;">
+                    <div class="upload-progress-bar">
+                        <div class="upload-progress-fill" id="upload-progress-fill"></div>
+                    </div>
+                    <div class="upload-progress-text" id="upload-progress-text">Uploading...</div>
+                </div>
+
+                <div class="asset-browser-layout" id="asset-browser-layout">
                     <div class="asset-tree-panel">
                         <div class="asset-tree-header">
                             <span>Folder Structure</span>
                         </div>
                         <div class="asset-tree" id="asset-tree">
-                            ${this.renderAssetTree(treeData)}
+                            ${this.renderAssetTree(result.data)}
                         </div>
                     </div>
                     <div class="asset-preview-panel">
@@ -1739,10 +1792,17 @@ class Dashboard {
                     </div>
                 </div>
             </div>
+
+            <!-- Context Menu (hidden by default) -->
+            <div class="asset-context-menu" id="asset-context-menu" style="display: none;">
+                <div class="context-menu-item" data-action="rename">Rename</div>
+                <div class="context-menu-item" data-action="delete">Delete</div>
+            </div>
         `;
 
         // Attach event listeners
         this.attachAssetBrowserListeners();
+        this.attachAssetManagementListeners();
     }
 
     renderAssetTree(node, level = 0, parentPath = '') {
@@ -2029,6 +2089,19 @@ class Dashboard {
                 e.stopPropagation();
                 const folderPath = folderItem.dataset.folderPath;
 
+                // Update selected folder for upload target
+                this.assetBrowserState.selectedFolder = folderPath;
+
+                // Update the current folder path display
+                const currentFolderPath = document.getElementById('current-folder-path');
+                if (currentFolderPath) {
+                    currentFolderPath.textContent = folderPath;
+                }
+                const dropzoneTargetFolder = document.getElementById('dropzone-target-folder');
+                if (dropzoneTargetFolder) {
+                    dropzoneTargetFolder.textContent = folderPath;
+                }
+
                 if (this.assetBrowserState.expandedFolders.has(folderPath)) {
                     this.assetBrowserState.expandedFolders.delete(folderPath);
                 } else {
@@ -2059,6 +2132,514 @@ class Dashboard {
         content.addEventListener('click', this._assetClickHandler);
         content.addEventListener('input', this._assetInputHandler);
         content.addEventListener('change', this._assetChangeHandler);
+    }
+
+    // Asset Management Event Listeners
+    attachAssetManagementListeners() {
+        const content = document.getElementById('content');
+        if (!content) return;
+
+        // Upload button click
+        const uploadBtn = document.getElementById('upload-btn');
+        const fileInput = document.getElementById('file-upload-input');
+
+        if (uploadBtn && fileInput) {
+            uploadBtn.addEventListener('click', () => {
+                fileInput.click();
+            });
+
+            fileInput.addEventListener('change', async (e) => {
+                const files = e.target.files;
+                if (files.length > 0) {
+                    await this.uploadFiles(files);
+                }
+                // Reset the input so the same files can be selected again
+                fileInput.value = '';
+            });
+        }
+
+        // New folder button click
+        const newFolderBtn = document.getElementById('new-folder-btn');
+        if (newFolderBtn) {
+            newFolderBtn.addEventListener('click', () => {
+                this.showCreateFolderModal();
+            });
+        }
+
+        // Drag and drop handlers
+        const assetBrowserLayout = document.getElementById('asset-browser-layout');
+        const dropzoneOverlay = document.getElementById('upload-dropzone-overlay');
+
+        if (assetBrowserLayout && dropzoneOverlay) {
+            // Prevent default drag behaviors on the whole document
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+                document.body.addEventListener(eventName, (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                }, false);
+            });
+
+            // Show dropzone when dragging files over the asset browser
+            assetBrowserLayout.addEventListener('dragenter', (e) => {
+                if (e.dataTransfer.types.includes('Files')) {
+                    dropzoneOverlay.classList.add('active');
+                }
+            });
+
+            dropzoneOverlay.addEventListener('dragleave', (e) => {
+                // Only hide if leaving the dropzone entirely
+                if (e.target === dropzoneOverlay) {
+                    dropzoneOverlay.classList.remove('active');
+                }
+            });
+
+            dropzoneOverlay.addEventListener('dragover', (e) => {
+                e.preventDefault();
+            });
+
+            dropzoneOverlay.addEventListener('drop', async (e) => {
+                e.preventDefault();
+                dropzoneOverlay.classList.remove('active');
+
+                const files = e.dataTransfer.files;
+                if (files.length > 0) {
+                    await this.uploadFiles(files);
+                }
+            });
+        }
+
+        // Context menu handler (right-click)
+        const assetTree = document.getElementById('asset-tree');
+        if (assetTree) {
+            assetTree.addEventListener('contextmenu', (e) => {
+                const treeItem = e.target.closest('.asset-tree-item');
+                if (treeItem) {
+                    e.preventDefault();
+                    this.showContextMenu(e, treeItem);
+                }
+            });
+        }
+
+        // Hide context menu on click elsewhere
+        document.addEventListener('click', () => {
+            this.hideContextMenu();
+        });
+
+        // Context menu action handler
+        const contextMenu = document.getElementById('asset-context-menu');
+        if (contextMenu) {
+            contextMenu.addEventListener('click', (e) => {
+                const action = e.target.dataset.action;
+                if (action && this._contextMenuTarget) {
+                    this.handleContextMenuAction(action);
+                }
+            });
+        }
+    }
+
+    // Upload files to the server
+    async uploadFiles(files) {
+        const targetFolder = this.assetBrowserState.selectedFolder || 'assets';
+        // Remove the leading 'assets/' if present for the API call
+        const apiTargetFolder = targetFolder.startsWith('assets/') ? targetFolder.substring(7) : (targetFolder === 'assets' ? '' : targetFolder);
+
+        // Show upload progress
+        const progressContainer = document.getElementById('upload-progress-container');
+        const progressFill = document.getElementById('upload-progress-fill');
+        const progressText = document.getElementById('upload-progress-text');
+
+        if (progressContainer) {
+            progressContainer.style.display = 'block';
+            progressFill.style.width = '0%';
+            progressText.textContent = `Uploading ${files.length} file(s)...`;
+        }
+
+        const formData = new FormData();
+        for (const file of files) {
+            formData.append('files', file);
+        }
+        formData.append('targetFolder', apiTargetFolder);
+
+        try {
+            const xhr = new XMLHttpRequest();
+
+            // Track upload progress
+            xhr.upload.addEventListener('progress', (e) => {
+                if (e.lengthComputable && progressFill && progressText) {
+                    const percentComplete = Math.round((e.loaded / e.total) * 100);
+                    progressFill.style.width = percentComplete + '%';
+                    progressText.textContent = `Uploading... ${percentComplete}%`;
+                }
+            });
+
+            // Create a promise for the XHR request
+            const uploadPromise = new Promise((resolve, reject) => {
+                xhr.onload = () => {
+                    if (xhr.status >= 200 && xhr.status < 300) {
+                        try {
+                            resolve(JSON.parse(xhr.responseText));
+                        } catch {
+                            reject(new Error('Invalid response'));
+                        }
+                    } else {
+                        try {
+                            const errorData = JSON.parse(xhr.responseText);
+                            reject(new Error(errorData.error || 'Upload failed'));
+                        } catch {
+                            reject(new Error('Upload failed'));
+                        }
+                    }
+                };
+                xhr.onerror = () => reject(new Error('Network error'));
+            });
+
+            xhr.open('POST', '/api/assets/upload');
+            xhr.send(formData);
+
+            const result = await uploadPromise;
+
+            if (progressText) {
+                progressText.textContent = `Successfully uploaded ${result.files.length} file(s)`;
+            }
+
+            // Refresh the asset browser after a short delay
+            setTimeout(() => {
+                if (progressContainer) {
+                    progressContainer.style.display = 'none';
+                }
+                this.renderAssets();
+            }, 1500);
+
+        } catch (error) {
+            console.error('Upload error:', error);
+            if (progressText) {
+                progressText.textContent = `Error: ${error.message}`;
+            }
+            setTimeout(() => {
+                if (progressContainer) {
+                    progressContainer.style.display = 'none';
+                }
+            }, 3000);
+        }
+    }
+
+    // Show create folder modal
+    showCreateFolderModal() {
+        const currentFolder = this.assetBrowserState.selectedFolder || 'assets';
+        const parentPath = currentFolder.startsWith('assets/') ? currentFolder.substring(7) : (currentFolder === 'assets' ? '' : currentFolder);
+
+        const modalHTML = `
+            <div class="modal-overlay" id="create-folder-modal">
+                <div class="modal" style="max-width: 500px;">
+                    <div class="modal-header">
+                        <div>
+                            <div class="modal-title">Create New Folder</div>
+                            <div class="modal-subtitle">in: ${this.escapeHtml(currentFolder)}</div>
+                        </div>
+                        <button class="modal-close" data-modal-close="create-folder-modal">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="form-group">
+                            <label class="form-label">Folder Name</label>
+                            <input type="text" class="form-input" id="new-folder-name" placeholder="Enter folder name..." autocomplete="off">
+                            <p class="form-hint">Allowed: letters, numbers, dashes, and underscores</p>
+                        </div>
+                        <div class="form-actions">
+                            <button class="btn btn-secondary" data-modal-close="create-folder-modal">Cancel</button>
+                            <button class="btn btn-primary" id="create-folder-confirm">Create Folder</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        this.showModal('create-folder-modal', modalHTML);
+
+        // Focus the input
+        const input = document.getElementById('new-folder-name');
+        if (input) {
+            input.focus();
+
+            // Handle Enter key
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    this.createFolder(parentPath, input.value);
+                }
+            });
+        }
+
+        // Handle confirm button
+        const confirmBtn = document.getElementById('create-folder-confirm');
+        if (confirmBtn) {
+            confirmBtn.addEventListener('click', () => {
+                this.createFolder(parentPath, input.value);
+            });
+        }
+
+        // Handle close buttons
+        document.querySelectorAll('[data-modal-close="create-folder-modal"]').forEach(btn => {
+            btn.addEventListener('click', () => this.closeModal('create-folder-modal'));
+        });
+    }
+
+    // Create folder via API
+    async createFolder(parentPath, folderName) {
+        if (!folderName || !folderName.trim()) {
+            console.error('Please enter a folder name'); return;
+            return;
+        }
+
+        try {
+            const response = await fetch('/api/assets/folder', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    path: parentPath,
+                    name: folderName.trim()
+                })
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                this.closeModal('create-folder-modal');
+                // Expand the parent folder and refresh
+                const fullPath = 'assets' + (parentPath ? '/' + parentPath : '');
+                this.assetBrowserState.expandedFolders.add(fullPath);
+                this.renderAssets();
+            } else {
+                console.error('Error:', result.error);
+            }
+        } catch (error) {
+            console.error('Create folder error:', error);
+            console.error('Error creating folder:', error.message);
+        }
+    }
+
+    // Show context menu
+    showContextMenu(event, targetElement) {
+        const contextMenu = document.getElementById('asset-context-menu');
+        if (!contextMenu) return;
+
+        // Store the target element for later action
+        const isFile = targetElement.classList.contains('asset-tree-file');
+        const isFolder = targetElement.classList.contains('asset-tree-directory');
+
+        if (isFile) {
+            this._contextMenuTarget = {
+                type: 'file',
+                path: targetElement.dataset.filePath,
+                element: targetElement
+            };
+        } else if (isFolder) {
+            this._contextMenuTarget = {
+                type: 'folder',
+                path: targetElement.dataset.folderPath,
+                element: targetElement
+            };
+        } else {
+            return;
+        }
+
+        // Position the menu at mouse coordinates
+        contextMenu.style.display = 'block';
+        contextMenu.style.left = event.pageX + 'px';
+        contextMenu.style.top = event.pageY + 'px';
+
+        // Make sure it doesn't go off screen
+        const menuRect = contextMenu.getBoundingClientRect();
+        if (menuRect.right > window.innerWidth) {
+            contextMenu.style.left = (event.pageX - menuRect.width) + 'px';
+        }
+        if (menuRect.bottom > window.innerHeight) {
+            contextMenu.style.top = (event.pageY - menuRect.height) + 'px';
+        }
+    }
+
+    // Hide context menu
+    hideContextMenu() {
+        const contextMenu = document.getElementById('asset-context-menu');
+        if (contextMenu) {
+            contextMenu.style.display = 'none';
+        }
+        this._contextMenuTarget = null;
+    }
+
+    // Handle context menu actions
+    handleContextMenuAction(action) {
+        const target = this._contextMenuTarget;
+        if (!target) return;
+
+        this.hideContextMenu();
+
+        switch (action) {
+            case 'rename':
+                this.showRenameModal(target);
+                break;
+            case 'delete':
+                this.showDeleteConfirmModal(target);
+                break;
+        }
+    }
+
+    // Show rename modal
+    showRenameModal(target) {
+        const currentName = target.path.split('/').pop();
+        const parentPath = target.path.substring(0, target.path.lastIndexOf('/'));
+
+        const modalHTML = `
+            <div class="modal-overlay" id="rename-modal">
+                <div class="modal" style="max-width: 500px;">
+                    <div class="modal-header">
+                        <div>
+                            <div class="modal-title">Rename ${target.type === 'folder' ? 'Folder' : 'File'}</div>
+                            <div class="modal-subtitle">${this.escapeHtml(target.path)}</div>
+                        </div>
+                        <button class="modal-close" data-modal-close="rename-modal">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="form-group">
+                            <label class="form-label">New Name</label>
+                            <input type="text" class="form-input" id="rename-input" value="${this.escapeHtml(currentName)}" autocomplete="off">
+                            <p class="form-hint">Allowed: letters, numbers, dashes, underscores, and dots</p>
+                        </div>
+                        <div class="form-actions">
+                            <button class="btn btn-secondary" data-modal-close="rename-modal">Cancel</button>
+                            <button class="btn btn-primary" id="rename-confirm">Rename</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        this.showModal('rename-modal', modalHTML);
+
+        const input = document.getElementById('rename-input');
+        if (input) {
+            input.focus();
+            input.select();
+
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    this.renameAsset(target.path, parentPath, input.value);
+                }
+            });
+        }
+
+        const confirmBtn = document.getElementById('rename-confirm');
+        if (confirmBtn) {
+            confirmBtn.addEventListener('click', () => {
+                this.renameAsset(target.path, parentPath, input.value);
+            });
+        }
+
+        document.querySelectorAll('[data-modal-close="rename-modal"]').forEach(btn => {
+            btn.addEventListener('click', () => this.closeModal('rename-modal'));
+        });
+    }
+
+    // Rename asset via API
+    async renameAsset(currentPath, parentPath, newName) {
+        if (!newName || !newName.trim()) {
+            console.error('Please enter a new name'); return;
+            return;
+        }
+
+        // Remove the 'assets/' prefix for API call
+        const apiCurrentPath = currentPath.startsWith('assets/') ? currentPath.substring(7) : currentPath;
+        const apiParentPath = parentPath.startsWith('assets/') ? parentPath.substring(7) : (parentPath === 'assets' ? '' : parentPath);
+        const newPath = apiParentPath ? apiParentPath + '/' + newName.trim() : newName.trim();
+
+        try {
+            const response = await fetch('/api/assets/' + encodeURIComponent(apiCurrentPath), {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ newPath })
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                this.closeModal('rename-modal');
+                this.renderAssets();
+            } else {
+                console.error('Error:', result.error);
+            }
+        } catch (error) {
+            console.error('Rename error:', error);
+            console.error('Error renaming:', error.message);
+        }
+    }
+
+    // Show delete confirmation modal
+    showDeleteConfirmModal(target) {
+        const isFolder = target.type === 'folder';
+
+        const modalHTML = `
+            <div class="modal-overlay" id="delete-modal">
+                <div class="modal" style="max-width: 500px;">
+                    <div class="modal-header">
+                        <div>
+                            <div class="modal-title">Delete ${isFolder ? 'Folder' : 'File'}</div>
+                        </div>
+                        <button class="modal-close" data-modal-close="delete-modal">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="delete-warning">
+                            <p>Are you sure you want to delete:</p>
+                            <p class="delete-path"><strong>${this.escapeHtml(target.path)}</strong></p>
+                            ${isFolder ? '<p class="delete-note">This will delete the folder and all its contents!</p>' : ''}
+                            <p class="delete-note">This action cannot be undone.</p>
+                        </div>
+                        <div class="form-actions">
+                            <button class="btn btn-secondary" data-modal-close="delete-modal">Cancel</button>
+                            <button class="btn btn-danger" id="delete-confirm">Delete</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        this.showModal('delete-modal', modalHTML);
+
+        const confirmBtn = document.getElementById('delete-confirm');
+        if (confirmBtn) {
+            confirmBtn.addEventListener('click', () => {
+                this.deleteAsset(target.path);
+            });
+        }
+
+        document.querySelectorAll('[data-modal-close="delete-modal"]').forEach(btn => {
+            btn.addEventListener('click', () => this.closeModal('delete-modal'));
+        });
+    }
+
+    // Delete asset via API
+    async deleteAsset(assetPath) {
+        // Remove the 'assets/' prefix for API call
+        const apiPath = assetPath.startsWith('assets/') ? assetPath.substring(7) : assetPath;
+
+        try {
+            const response = await fetch('/api/assets/' + encodeURIComponent(apiPath), {
+                method: 'DELETE'
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                this.closeModal('delete-modal');
+                // Clear selection if deleted item was selected
+                if (this.assetBrowserState.selectedFile && this.assetBrowserState.selectedFile.path === assetPath) {
+                    this.assetBrowserState.selectedFile = null;
+                }
+                this.renderAssets();
+            } else {
+                console.error('Error:', result.error);
+            }
+        } catch (error) {
+            console.error('Delete error:', error);
+            console.error('Error deleting:', error.message);
+        }
     }
 
     async renderDistribution() {

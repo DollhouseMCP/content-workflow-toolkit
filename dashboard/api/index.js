@@ -1,8 +1,11 @@
 import express from 'express';
 import fs from 'fs/promises';
+import fsSync from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { randomBytes } from 'crypto';
 import yaml from 'js-yaml';
+import multer from 'multer';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -29,6 +32,106 @@ const MAX_SERIES_NAME_LENGTH = 100;
 // Security: Allowlist for valid slug characters (alphanumeric, hyphens, underscores)
 const VALID_SLUG_REGEX = /^[a-z0-9][a-z0-9-_]*[a-z0-9]$|^[a-z0-9]$/;
 const VALID_SERIES_REGEX = /^[a-zA-Z0-9][a-zA-Z0-9-_ ]*[a-zA-Z0-9]$|^[a-zA-Z0-9]$/;
+
+// ============================================
+// Security Configuration for File Uploads
+// ============================================
+
+// Allowed file extensions (whitelist)
+// Note: SVG files can contain JavaScript. For public-facing applications,
+// either remove SVG from this list or sanitize SVG content before serving.
+// In this internal content workflow tool, SVGs are only accessible to authorized users.
+const ALLOWED_EXTENSIONS = new Set([
+  // Images
+  '.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg', '.bmp', '.ico',
+  // Video
+  '.mp4', '.mov', '.webm', '.avi', '.mkv', '.m4v',
+  // Audio
+  '.mp3', '.wav', '.m4a', '.aac', '.ogg', '.flac',
+  // Documents
+  '.pdf', '.doc', '.docx', '.txt', '.md', '.rtf',
+  // Data/Config
+  '.json', '.yml', '.yaml', '.csv', '.xml'
+]);
+
+// Maximum file size: 100MB
+const MAX_FILE_SIZE = 100 * 1024 * 1024;
+
+// Sanitize filename - remove special characters that could cause issues
+function sanitizeFilename(filename) {
+  // Get the extension
+  const ext = path.extname(filename).toLowerCase();
+  const name = path.basename(filename, ext);
+
+  // Replace dangerous characters, keep alphanumeric, dash, underscore, space, and dot
+  const sanitized = name
+    .replace(/[^a-zA-Z0-9\-_\s.]/g, '_')
+    .replace(/\s+/g, '_')
+    .replace(/_+/g, '_')
+    .substring(0, 200); // Limit length
+
+  return sanitized + ext;
+}
+
+// Validate path is within assets directory (prevent path traversal)
+// Uses path.relative() for robust cross-platform handling
+function isPathWithinAssets(targetPath) {
+  const resolvedPath = path.resolve(ASSETS_DIR, targetPath);
+  const normalizedAssetsDir = path.resolve(ASSETS_DIR);
+  const relativePath = path.relative(normalizedAssetsDir, resolvedPath);
+
+  // Path is within assets if:
+  // 1. Relative path doesn't start with '..' (would indicate escaping the directory)
+  // 2. Relative path isn't an absolute path (edge case on Windows)
+  // 3. Relative path is empty string (exact match) or a valid child path
+  return relativePath === '' ||
+         (!relativePath.startsWith('..') && !path.isAbsolute(relativePath));
+}
+
+// Validate file extension
+function isAllowedExtension(filename) {
+  const ext = path.extname(filename).toLowerCase();
+  return ALLOWED_EXTENSIONS.has(ext);
+}
+
+// Configure multer for file uploads
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    // Temporary upload location
+    const uploadDir = path.join(BASE_DIR, 'uploads');
+    // Create uploads directory if it doesn't exist
+    if (!fsSync.existsSync(uploadDir)) {
+      fsSync.mkdirSync(uploadDir, { recursive: true });
+    }
+    cb(null, uploadDir);
+  },
+  filename: function (req, file, cb) {
+    // Generate unique filename with original extension
+    // Uses crypto.randomBytes for cryptographically secure unique suffix
+    const sanitized = sanitizeFilename(file.originalname);
+    const uniqueSuffix = `${Date.now()}-${randomBytes(4).toString('hex')}`;
+    const ext = path.extname(sanitized);
+    const name = path.basename(sanitized, ext);
+    cb(null, `${name}-${uniqueSuffix}${ext}`);
+  }
+});
+
+const fileFilter = function (req, file, cb) {
+  if (!isAllowedExtension(file.originalname)) {
+    cb(new Error(`File type not allowed: ${path.extname(file.originalname)}`), false);
+    return;
+  }
+  cb(null, true);
+};
+
+const upload = multer({
+  storage: storage,
+  limits: {
+    fileSize: MAX_FILE_SIZE,
+    files: 20 // Maximum 20 files at once
+  },
+  fileFilter: fileFilter
+});
 
 // Cached metadata template (loaded once at startup, deep cloned on use)
 let cachedMetadataTemplate = null;
@@ -963,6 +1066,385 @@ router.post('/episodes', async (req, res) => {
       error: 'Failed to create episode. Please try again.'
     });
   }
+});
+
+// ============================================
+// Asset Management API Endpoints
+// ============================================
+
+// POST /api/assets/upload - Upload files to a target folder
+router.post('/assets/upload', upload.array('files', 20), async (req, res) => {
+  const movedFiles = []; // Track files that have been moved for cleanup on error (must be outside try for catch access)
+
+  try {
+    const targetFolder = req.body.targetFolder || '';
+
+    // Security: Validate target folder is within assets directory
+    if (!isPathWithinAssets(targetFolder)) {
+      // Clean up uploaded files
+      for (const file of req.files || []) {
+        await fs.unlink(file.path).catch(() => {});
+      }
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid target folder path'
+      });
+    }
+
+    const targetDir = path.join(ASSETS_DIR, targetFolder);
+
+    // Ensure target directory exists
+    await fs.mkdir(targetDir, { recursive: true });
+
+    const uploadedFiles = [];
+
+    for (const file of req.files || []) {
+      // Use the filename already generated by multer (already sanitized with unique suffix)
+      // Multer's storage config generates: sanitized-name-timestamp-randomhex.ext
+      const finalPath = path.join(targetDir, file.filename);
+
+      // Note: With timestamp + crypto.randomBytes(4), collision probability is negligible
+      // (~1 in 4.3 billion per millisecond). This check is defense-in-depth.
+      // TOCTOU window exists but collision risk is astronomically low.
+      try {
+        await fs.access(finalPath);
+        // File exists - this is unexpected with random suffix
+        throw Object.assign(new Error('File already exists at destination'), { code: 'EEXIST' });
+      } catch (err) {
+        if (err.code !== 'ENOENT') {
+          throw err; // Re-throw if not "file doesn't exist"
+        }
+        // Good - file doesn't exist, proceed with rename
+      }
+
+      // Move file from temp uploads to target directory
+      await fs.rename(file.path, finalPath);
+      movedFiles.push(finalPath); // Track for cleanup
+
+      // Get file stats for response
+      const stats = await fs.stat(finalPath);
+
+      uploadedFiles.push({
+        name: file.filename,
+        originalName: file.originalname,
+        path: path.relative(ASSETS_DIR, finalPath),
+        size: stats.size,
+        type: file.mimetype
+      });
+    }
+
+    res.json({
+      success: true,
+      files: uploadedFiles,
+      message: `Successfully uploaded ${uploadedFiles.length} file(s)`
+    });
+
+  } catch (error) {
+    // Clean up files that were moved to target directory
+    for (const movedPath of movedFiles) {
+      await fs.unlink(movedPath).catch(() => {});
+    }
+    // Clean up any temp files that weren't moved yet
+    for (const file of req.files || []) {
+      await fs.unlink(file.path).catch(() => {});
+    }
+    console.error('Upload error:', error);
+
+    // Provide specific error messages for common failure cases
+    if (error.code === 'ENOSPC') {
+      return res.status(507).json({
+        success: false,
+        error: 'Insufficient storage space'
+      });
+    }
+    if (error.code === 'EACCES') {
+      return res.status(500).json({
+        success: false,
+        error: 'Permission denied'
+      });
+    }
+
+    res.status(500).json({
+      success: false,
+      error: 'An internal error occurred during upload'
+    });
+  }
+});
+
+// POST /api/assets/folder - Create a new folder
+router.post('/assets/folder', async (req, res) => {
+  try {
+    const { path: parentPath, name } = req.body;
+
+    if (!name || typeof name !== 'string') {
+      return res.status(400).json({
+        success: false,
+        error: 'Folder name is required'
+      });
+    }
+
+    // Sanitize folder name
+    const sanitizedName = name
+      .replace(/[^a-zA-Z0-9\-_\s]/g, '_')
+      .replace(/\s+/g, '_')
+      .replace(/_+/g, '_')
+      .substring(0, 100);
+
+    if (!sanitizedName) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid folder name'
+      });
+    }
+
+    const parentDir = parentPath ? parentPath : '';
+    const newFolderPath = path.join(parentDir, sanitizedName);
+
+    // Security: Validate path is within assets directory
+    if (!isPathWithinAssets(newFolderPath)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid folder path'
+      });
+    }
+
+    const fullPath = path.join(ASSETS_DIR, newFolderPath);
+
+    // Ensure parent directory exists first (recursive is safe here)
+    const parentFullPath = path.dirname(fullPath);
+    await fs.mkdir(parentFullPath, { recursive: true });
+
+    // Create the final folder without recursive to get EEXIST error if it exists
+    // This avoids TOCTOU race condition with access() check
+    try {
+      await fs.mkdir(fullPath, { recursive: false });
+    } catch (mkdirError) {
+      if (mkdirError.code === 'EEXIST') {
+        return res.status(400).json({
+          success: false,
+          error: 'Folder already exists'
+        });
+      }
+      throw mkdirError;
+    }
+
+    res.json({
+      success: true,
+      folder: {
+        name: sanitizedName,
+        path: newFolderPath
+      },
+      message: `Folder "${sanitizedName}" created successfully`
+    });
+
+  } catch (error) {
+    console.error('Create folder error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'An internal error occurred while creating folder'
+    });
+  }
+});
+
+// DELETE /api/assets/* - Delete a file or folder
+router.delete('/assets/*', async (req, res) => {
+  try {
+    // Get the path from URL params (everything after /assets/)
+    const assetPath = req.params[0];
+
+    if (!assetPath) {
+      return res.status(400).json({
+        success: false,
+        error: 'Path is required'
+      });
+    }
+
+    // Security: Validate path is within assets directory
+    if (!isPathWithinAssets(assetPath)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid path'
+      });
+    }
+
+    // Prevent deleting the assets root directory
+    const fullPath = path.join(ASSETS_DIR, assetPath);
+    if (path.resolve(fullPath) === path.resolve(ASSETS_DIR)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Cannot delete the root assets folder'
+      });
+    }
+
+    // Check if path exists
+    try {
+      await fs.access(fullPath);
+    } catch {
+      return res.status(404).json({
+        success: false,
+        error: 'File or folder not found'
+      });
+    }
+
+    // Get stats to determine if it's a file or directory
+    const stats = await fs.stat(fullPath);
+
+    if (stats.isDirectory()) {
+      // Delete directory recursively
+      await fs.rm(fullPath, { recursive: true, force: true });
+    } else {
+      // Delete file
+      await fs.unlink(fullPath);
+    }
+
+    res.json({
+      success: true,
+      message: `Successfully deleted: ${assetPath}`
+    });
+
+  } catch (error) {
+    console.error('Delete error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'An internal error occurred during delete operation'
+    });
+  }
+});
+
+// PATCH /api/assets/* - Rename or move a file/folder
+router.patch('/assets/*', async (req, res) => {
+  try {
+    // Get the current path from URL params
+    const currentPath = req.params[0];
+    const { newPath } = req.body;
+
+    if (!currentPath) {
+      return res.status(400).json({
+        success: false,
+        error: 'Current path is required'
+      });
+    }
+
+    if (!newPath || typeof newPath !== 'string') {
+      return res.status(400).json({
+        success: false,
+        error: 'New path is required'
+      });
+    }
+
+    // Sanitize the filename portion of the new path
+    const newPathDir = path.dirname(newPath);
+    const newPathFilename = path.basename(newPath);
+    const sanitizedFilename = sanitizeFilename(newPathFilename);
+    const sanitizedNewPath = newPathDir === '.' ? sanitizedFilename : path.join(newPathDir, sanitizedFilename);
+
+    // Security: Validate both paths are within assets directory
+    if (!isPathWithinAssets(currentPath)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid current path'
+      });
+    }
+
+    if (!isPathWithinAssets(sanitizedNewPath)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid new path'
+      });
+    }
+
+    const fullCurrentPath = path.join(ASSETS_DIR, currentPath);
+    const fullNewPath = path.join(ASSETS_DIR, sanitizedNewPath);
+
+    // Prevent modifying the assets root
+    if (path.resolve(fullCurrentPath) === path.resolve(ASSETS_DIR)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Cannot rename the root assets folder'
+      });
+    }
+
+    // Check if source exists
+    try {
+      await fs.access(fullCurrentPath);
+    } catch {
+      return res.status(404).json({
+        success: false,
+        error: 'Source file or folder not found'
+      });
+    }
+
+    // Ensure parent directory of destination exists
+    const newParentDir = path.dirname(fullNewPath);
+    await fs.mkdir(newParentDir, { recursive: true });
+
+    // Perform the rename/move - handles EEXIST on Windows
+    // Note: On POSIX systems, fs.rename() atomically overwrites existing files by design,
+    // so EEXIST won't be thrown. The stat check provides user feedback but has a TOCTOU window.
+    // This is acceptable since this is a single-user tool where concurrent renames to same path are rare.
+    try {
+      // Check destination exists just before rename to minimize race window
+      const destStats = await fs.stat(fullNewPath).catch(() => null);
+      if (destStats) {
+        return res.status(400).json({
+          success: false,
+          error: 'Destination already exists'
+        });
+      }
+      await fs.rename(fullCurrentPath, fullNewPath);
+    } catch (renameError) {
+      if (renameError.code === 'EEXIST') {
+        return res.status(400).json({
+          success: false,
+          error: 'Destination already exists'
+        });
+      }
+      throw renameError;
+    }
+
+    res.json({
+      success: true,
+      oldPath: currentPath,
+      newPath: sanitizedNewPath,
+      message: `Successfully renamed/moved to: ${sanitizedNewPath}`
+    });
+
+  } catch (error) {
+    console.error('Rename/move error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'An internal error occurred during rename/move operation'
+    });
+  }
+});
+
+// Error handling middleware for multer
+router.use((error, req, res, next) => {
+  if (error instanceof multer.MulterError) {
+    if (error.code === 'LIMIT_FILE_SIZE') {
+      return res.status(400).json({
+        success: false,
+        error: `File too large. Maximum size is ${MAX_FILE_SIZE / (1024 * 1024)}MB`
+      });
+    }
+    if (error.code === 'LIMIT_FILE_COUNT') {
+      return res.status(400).json({
+        success: false,
+        error: 'Too many files. Maximum is 20 files at once'
+      });
+    }
+    return res.status(400).json({
+      success: false,
+      error: error.message
+    });
+  }
+  if (error) {
+    return res.status(400).json({
+      success: false,
+      error: error.message
+    });
+  }
+  next();
 });
 
 export default router;

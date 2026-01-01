@@ -2779,3 +2779,179 @@ input[type="date"].edit-field::-webkit-calendar-picker-indicator {
         width: 100%;
     }
 }
+
+/* =============================================================================
+   PERFORMANCE OPTIMIZATION STYLES
+   ============================================================================= */
+
+/* Virtual Scrolling */
+.virtual-scroll-spacer {
+    position: relative;
+    width: 100%;
+}
+
+.column-cards.virtual-scroll-enabled {
+    scroll-behavior: smooth;
+}
+
+.column-cards .episode-card[data-virtual-index] {
+    box-sizing: border-box;
+}
+
+/* Load More Button */
+.load-more-container {
+    display: flex;
+    justify-content: center;
+    padding: 1.5rem;
+    margin-top: 1rem;
+}
+
+.load-more-btn {
+    min-width: 200px;
+    padding: 0.75rem 1.5rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    transition: all 0.2s;
+}
+
+.load-more-btn:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.load-more-btn:active:not(:disabled) {
+    transform: translateY(0);
+}
+
+.load-more-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* Section Count Badge */
+.section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.section-count {
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+    background-color: var(--surface);
+    padding: 0.25rem 0.75rem;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+}
+
+/* Loading Skeleton Animation */
+@keyframes shimmer {
+    0% {
+        background-position: -200% 0;
+    }
+    100% {
+        background-position: 200% 0;
+    }
+}
+
+.skeleton {
+    background: linear-gradient(
+        90deg,
+        var(--surface) 25%,
+        var(--surface-hover) 50%,
+        var(--surface) 75%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+    border-radius: 4px;
+}
+
+.skeleton-card {
+    height: 200px;
+    border-radius: 8px;
+}
+
+.skeleton-text {
+    height: 1rem;
+    margin-bottom: 0.5rem;
+}
+
+.skeleton-text-short {
+    width: 60%;
+}
+
+/* Lazy Loading Placeholder */
+.lazy-loading-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+}
+
+.lazy-loading-spinner {
+    width: 20px;
+    height: 20px;
+    border: 2px solid var(--border);
+    border-top-color: var(--primary-color);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin-right: 0.5rem;
+}
+
+/* Performance Debug Mode (hidden by default) */
+.perf-debug {
+    display: none;
+    position: fixed;
+    bottom: 1rem;
+    left: 1rem;
+    background-color: rgba(0, 0, 0, 0.8);
+    color: #00ff00;
+    font-family: monospace;
+    font-size: 0.75rem;
+    padding: 0.5rem 1rem;
+    border-radius: 4px;
+    z-index: 9999;
+}
+
+.perf-debug.visible {
+    display: block;
+}
+
+/* Optimized Card Grid for Many Items */
+.card-grid-optimized {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1rem;
+    contain: layout style;
+}
+
+/* Content Visibility for Off-screen Elements */
+.content-visibility-auto {
+    content-visibility: auto;
+    contain-intrinsic-size: 200px;
+}
+
+/* Responsive Load More */
+@media (max-width: 768px) {
+    .load-more-container {
+        padding: 1rem;
+    }
+
+    .load-more-btn {
+        width: 100%;
+        min-width: auto;
+    }
+
+    .section-count {
+        margin-top: 0.5rem;
+    }
+}

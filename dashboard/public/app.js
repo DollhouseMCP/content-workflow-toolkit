@@ -23,8 +23,82 @@ const DASHBOARD_CONFIG = {
         '.mp3', '.wav', '.m4a', '.aac', '.ogg', '.flac',
         '.pdf', '.doc', '.docx', '.txt', '.md', '.rtf',
         '.json', '.yml', '.yaml', '.csv', '.xml'
-    ]
+    ],
+
+    // Performance optimization settings
+    VIRTUAL_SCROLL: {
+        ITEM_HEIGHT: 280,           // Approximate height of an episode card in pixels
+        BUFFER_SIZE: 5,             // Number of extra items to render above/below viewport
+        THROTTLE_DELAY: 16          // Scroll event throttle in ms (~60fps)
+    },
+    PAGINATION: {
+        RELEASES_PAGE_SIZE: 10,     // Number of release groups to show initially
+        EPISODES_PAGE_SIZE: 20,     // Number of episodes per page in list view
+        LOAD_MORE_INCREMENT: 10     // How many more items to load when clicking "Load More"
+    },
+    LAZY_LOADING: {
+        CALENDAR_MONTHS_AHEAD: 1,   // How many months ahead to pre-load
+        CALENDAR_MONTHS_BEHIND: 1,  // How many months behind to pre-load
+        DEBOUNCE_DELAY: 150         // Debounce delay for lazy loading triggers
+    },
+    MEMOIZATION: {
+        CACHE_TTL: 30000,           // Cache time-to-live in milliseconds (30 seconds)
+        MAX_CACHE_SIZE: 50          // Maximum number of cached entries
+    }
 };
+
+// Simple memoization cache for computed values
+class MemoCache {
+    constructor(maxSize = DASHBOARD_CONFIG.MEMOIZATION.MAX_CACHE_SIZE, ttl = DASHBOARD_CONFIG.MEMOIZATION.CACHE_TTL) {
+        this.cache = new Map();
+        this.maxSize = maxSize;
+        this.ttl = ttl;
+    }
+
+    // Generate a cache key from filter/sort parameters
+    static generateKey(prefix, params) {
+        return `${prefix}:${JSON.stringify(params)}`;
+    }
+
+    get(key) {
+        const entry = this.cache.get(key);
+        if (!entry) return null;
+
+        // Check if entry has expired
+        if (Date.now() - entry.timestamp > this.ttl) {
+            this.cache.delete(key);
+            return null;
+        }
+
+        return entry.value;
+    }
+
+    set(key, value) {
+        // Evict oldest entries if cache is full
+        if (this.cache.size >= this.maxSize) {
+            const oldestKey = this.cache.keys().next().value;
+            this.cache.delete(oldestKey);
+        }
+
+        this.cache.set(key, {
+            value,
+            timestamp: Date.now()
+        });
+    }
+
+    invalidate(keyPrefix) {
+        // Remove all entries matching a prefix
+        for (const key of this.cache.keys()) {
+            if (key.startsWith(keyPrefix)) {
+                this.cache.delete(key);
+            }
+        }
+    }
+
+    clear() {
+        this.cache.clear();
+    }
+}
 
 class Dashboard {
     constructor() {
@@ -32,6 +106,24 @@ class Dashboard {
         this.data = {};
         this.seriesList = [];
         this.distributionProfiles = [];
+
+        // Performance optimization state
+        this.memoCache = new MemoCache();
+        this.virtualScrollState = {
+            scrollTop: 0,
+            containerHeight: 0,
+            startIndex: 0,
+            endIndex: 0,
+            isActive: false
+        };
+        this.paginationState = {
+            releases: { page: 1, hasMore: true },
+            episodes: { page: 1, hasMore: true }
+        };
+        this.lazyLoadState = {
+            loadedMonths: new Set()
+        };
+
         this.init();
     }
 
@@ -252,44 +344,66 @@ class Dashboard {
             };
         }
 
-        // Filter and sort episodes
-        let episodes = result.episodes;
+        // Use memoization for filtered and sorted episodes
+        const cacheKey = MemoCache.generateKey('pipeline', {
+            filter: this.pipelineState.filterSeries,
+            sort: this.pipelineState.sortBy,
+            count: result.episodes.length
+        });
 
-        if (this.pipelineState.filterSeries !== 'all') {
-            episodes = episodes.filter(ep => ep.series === this.pipelineState.filterSeries);
+        let columns = this.memoCache.get(cacheKey);
+
+        if (!columns) {
+            // Filter and sort episodes
+            let episodes = result.episodes;
+
+            if (this.pipelineState.filterSeries !== 'all') {
+                episodes = episodes.filter(ep => ep.series === this.pipelineState.filterSeries);
+            }
+
+            // Sort episodes
+            episodes = [...episodes].sort((a, b) => {
+                if (this.pipelineState.sortBy === 'created') {
+                    // Sort by episode name (which includes date YYYY-MM-DD)
+                    return b.episode.localeCompare(a.episode);
+                } else if (this.pipelineState.sortBy === 'target_release') {
+                    const dateA = a.metadata?.release?.target_date || '';
+                    const dateB = b.metadata?.release?.target_date || '';
+                    if (!dateA) return 1;
+                    if (!dateB) return -1;
+                    return dateA.localeCompare(dateB);
+                }
+                return 0;
+            });
+
+            // Group episodes by content_status
+            columns = {
+                draft: { title: 'Draft', episodes: [] },
+                ready: { title: 'Ready', episodes: [] },
+                staged: { title: 'Staged', episodes: [] },
+                released: { title: 'Released', episodes: [] }
+            };
+
+            episodes.forEach(episode => {
+                const status = episode.metadata?.content_status || 'draft';
+                if (columns[status]) {
+                    columns[status].episodes.push(episode);
+                } else {
+                    columns.draft.episodes.push(episode);
+                }
+            });
+
+            // Cache the computed columns
+            this.memoCache.set(cacheKey, columns);
         }
 
-        // Sort episodes
-        episodes.sort((a, b) => {
-            if (this.pipelineState.sortBy === 'created') {
-                // Sort by episode name (which includes date YYYY-MM-DD)
-                return b.episode.localeCompare(a.episode);
-            } else if (this.pipelineState.sortBy === 'target_release') {
-                const dateA = a.metadata?.release?.target_date || '';
-                const dateB = b.metadata?.release?.target_date || '';
-                if (!dateA) return 1;
-                if (!dateB) return -1;
-                return dateA.localeCompare(dateB);
-            }
-            return 0;
-        });
-
-        // Group episodes by content_status
-        const columns = {
-            draft: { title: 'Draft', episodes: [] },
-            ready: { title: 'Ready', episodes: [] },
-            staged: { title: 'Staged', episodes: [] },
-            released: { title: 'Released', episodes: [] }
-        };
-
-        episodes.forEach(episode => {
-            const status = episode.metadata?.content_status || 'draft';
-            if (columns[status]) {
-                columns[status].episodes.push(episode);
-            } else {
-                columns.draft.episodes.push(episode);
-            }
-        });
+        // Collect all episodes for click handlers
+        const allFilteredEpisodes = [
+            ...columns.draft.episodes,
+            ...columns.ready.episodes,
+            ...columns.staged.episodes,
+            ...columns.released.episodes
+        ];
 
         // Generate series filter options
         const seriesOptions = allSeries.map(series =>
@@ -372,7 +486,7 @@ class Dashboard {
                     return;
                 }
                 const episodePath = card.dataset.episodePath;
-                const episode = episodes.find(ep => ep.path === episodePath);
+                const episode = allFilteredEpisodes.find(ep => ep.path === episodePath);
                 if (episode) {
                     this.showEpisodeModal(episode, releaseGroups);
                 }
@@ -380,7 +494,119 @@ class Dashboard {
         });
 
         // Attach inline status dropdown handlers
-        this.attachInlineStatusHandlers(episodes);
+        this.attachInlineStatusHandlers(allFilteredEpisodes);
+
+        // Initialize virtual scrolling for kanban columns with many items
+        this.initVirtualScrollForColumns(columns, releaseGroups);
+    }
+
+    // Initialize virtual scrolling for kanban columns
+    initVirtualScrollForColumns(columns, releaseGroups) {
+        const { ITEM_HEIGHT, BUFFER_SIZE, THROTTLE_DELAY } = DASHBOARD_CONFIG.VIRTUAL_SCROLL;
+
+        document.querySelectorAll('.column-cards').forEach(columnEl => {
+            const status = columnEl.closest('.kanban-column')?.querySelector('.column-header')?.classList;
+            let columnStatus = 'draft';
+            if (status?.contains('ready')) columnStatus = 'ready';
+            else if (status?.contains('staged')) columnStatus = 'staged';
+            else if (status?.contains('released')) columnStatus = 'released';
+
+            const columnData = columns[columnStatus];
+            if (!columnData || columnData.episodes.length <= BUFFER_SIZE * 2) {
+                // Not enough items to benefit from virtual scrolling
+                return;
+            }
+
+            // Enable virtual scrolling for this column
+            this.setupColumnVirtualScroll(columnEl, columnData.episodes, releaseGroups, {
+                itemHeight: ITEM_HEIGHT,
+                bufferSize: BUFFER_SIZE,
+                throttleDelay: THROTTLE_DELAY
+            });
+        });
+    }
+
+    // Setup virtual scrolling for a single column
+    setupColumnVirtualScroll(container, episodes, releaseGroups, config) {
+        const { itemHeight, bufferSize, throttleDelay } = config;
+        const totalHeight = episodes.length * itemHeight;
+
+        // Create a virtual scroll container
+        container.style.position = 'relative';
+        container.style.height = `${Math.min(totalHeight, 600)}px`; // Max height of 600px
+        container.style.overflowY = 'auto';
+
+        // Create spacer element
+        const spacer = document.createElement('div');
+        spacer.className = 'virtual-scroll-spacer';
+        spacer.style.height = `${totalHeight}px`;
+        spacer.style.position = 'relative';
+
+        // Clear existing content and add spacer
+        container.innerHTML = '';
+        container.appendChild(spacer);
+
+        // Render visible items
+        const renderVisibleItems = () => {
+            const scrollTop = container.scrollTop;
+            const containerHeight = container.clientHeight;
+
+            const startIndex = Math.max(0, Math.floor(scrollTop / itemHeight) - bufferSize);
+            const endIndex = Math.min(
+                episodes.length,
+                Math.ceil((scrollTop + containerHeight) / itemHeight) + bufferSize
+            );
+
+            // Remove items outside the visible range
+            const existingItems = spacer.querySelectorAll('.episode-card');
+            existingItems.forEach(item => {
+                const idx = parseInt(item.dataset.virtualIndex, 10);
+                if (idx < startIndex || idx >= endIndex) {
+                    item.remove();
+                }
+            });
+
+            // Add items that should be visible
+            for (let i = startIndex; i < endIndex; i++) {
+                if (!spacer.querySelector(`[data-virtual-index="${i}"]`)) {
+                    const episode = episodes[i];
+                    const cardHTML = this.renderEpisodeCard(episode, releaseGroups);
+                    const tempDiv = document.createElement('div');
+                    tempDiv.innerHTML = cardHTML;
+                    const card = tempDiv.firstElementChild;
+                    card.dataset.virtualIndex = i;
+                    card.style.position = 'absolute';
+                    card.style.top = `${i * itemHeight}px`;
+                    card.style.left = '0';
+                    card.style.right = '0';
+                    card.style.width = 'calc(100% - 1rem)';
+                    card.style.margin = '0 0.5rem';
+
+                    // Add click handler
+                    card.addEventListener('click', (e) => {
+                        if (e.target.closest('.status-dropdown-container') || e.target.closest('.status-dropdown')) {
+                            return;
+                        }
+                        this.showEpisodeModal(episode, releaseGroups);
+                    });
+
+                    spacer.appendChild(card);
+                }
+            }
+        };
+
+        // Throttled scroll handler
+        let scrollTimeout = null;
+        container.addEventListener('scroll', () => {
+            if (scrollTimeout) return;
+            scrollTimeout = setTimeout(() => {
+                renderVisibleItems();
+                scrollTimeout = null;
+            }, throttleDelay);
+        });
+
+        // Initial render
+        renderVisibleItems();
     }
 
     // Attach inline status dropdown handlers
@@ -1606,14 +1832,44 @@ class Dashboard {
         }
 
         const data = result.data;
-        const hasGroups = data.release_groups && Object.keys(data.release_groups).length > 0;
-        const hasStaged = data.staged && data.staged.length > 0;
-        const hasBlocked = data.blocked && data.blocked.length > 0;
+
+        // Initialize releases pagination state if needed
+        if (!this.releasesState) {
+            this.releasesState = {
+                groupsPage: 1,
+                stagedPage: 1,
+                blockedPage: 1
+            };
+        }
+
+        const { RELEASES_PAGE_SIZE, LOAD_MORE_INCREMENT } = DASHBOARD_CONFIG.PAGINATION;
+
+        // Get all items
+        const allGroups = data.release_groups ? Object.entries(data.release_groups) : [];
+        const allStaged = data.staged || [];
+        const allBlocked = data.blocked || [];
+
+        // Calculate visible items based on current page
+        const visibleGroupsCount = this.releasesState.groupsPage * RELEASES_PAGE_SIZE;
+        const visibleStagedCount = this.releasesState.stagedPage * RELEASES_PAGE_SIZE;
+        const visibleBlockedCount = this.releasesState.blockedPage * RELEASES_PAGE_SIZE;
+
+        const visibleGroups = allGroups.slice(0, visibleGroupsCount);
+        const visibleStaged = allStaged.slice(0, visibleStagedCount);
+        const visibleBlocked = allBlocked.slice(0, visibleBlockedCount);
+
+        const hasMoreGroups = allGroups.length > visibleGroupsCount;
+        const hasMoreStaged = allStaged.length > visibleStagedCount;
+        const hasMoreBlocked = allBlocked.length > visibleBlockedCount;
+
+        const hasGroups = allGroups.length > 0;
+        const hasStaged = allStaged.length > 0;
+        const hasBlocked = allBlocked.length > 0;
 
         let sectionsHTML = '';
 
         if (hasGroups) {
-            const groupsHTML = Object.entries(data.release_groups).map(([id, group]) => `
+            const groupsHTML = visibleGroups.map(([id, group]) => `
                 <div class="card">
                     <div class="card-header">
                         <div class="card-title">${this.escapeHtml(group.name || id)}</div>
@@ -1629,45 +1885,79 @@ class Dashboard {
                 </div>
             `).join('');
 
+            const loadMoreGroupsHTML = hasMoreGroups ? `
+                <div class="load-more-container">
+                    <button class="btn btn-secondary load-more-btn" id="load-more-groups">
+                        Load More (${allGroups.length - visibleGroupsCount} remaining)
+                    </button>
+                </div>
+            ` : '';
+
             sectionsHTML += `
                 <div class="section-header mt-3">
                     <h3>Release Groups</h3>
+                    <span class="section-count">${visibleGroups.length} of ${allGroups.length}</span>
                 </div>
-                <div class="card-grid">
+                <div class="card-grid" id="release-groups-container">
                     ${groupsHTML}
                 </div>
+                ${loadMoreGroupsHTML}
             `;
         }
 
         if (hasStaged) {
+            const stagedHTML = visibleStaged.map(item => `
+                <div class="list-item">
+                    <div>${this.escapeHtml(item.path)}</div>
+                    <div class="mt-1"><span class="badge ${this.getStatusClass(item.status)}">${item.status}</span></div>
+                </div>
+            `).join('');
+
+            const loadMoreStagedHTML = hasMoreStaged ? `
+                <div class="load-more-container">
+                    <button class="btn btn-secondary load-more-btn" id="load-more-staged">
+                        Load More (${allStaged.length - visibleStagedCount} remaining)
+                    </button>
+                </div>
+            ` : '';
+
             sectionsHTML += `
                 <div class="section-header mt-3">
                     <h3>Staged Content</h3>
+                    <span class="section-count">${visibleStaged.length} of ${allStaged.length}</span>
                 </div>
-                <div class="list">
-                    ${data.staged.map(item => `
-                        <div class="list-item">
-                            <div>${this.escapeHtml(item.path)}</div>
-                            <div class="mt-1"><span class="badge ${this.getStatusClass(item.status)}">${item.status}</span></div>
-                        </div>
-                    `).join('')}
+                <div class="list" id="staged-content-container">
+                    ${stagedHTML}
                 </div>
+                ${loadMoreStagedHTML}
             `;
         }
 
         if (hasBlocked) {
+            const blockedHTML = visibleBlocked.map(item => `
+                <div class="list-item">
+                    <div>${this.escapeHtml(item.path)}</div>
+                    <div class="mt-1 text-muted"><small>Blocked by: ${this.escapeHtml(item.blocked_by)}</small></div>
+                </div>
+            `).join('');
+
+            const loadMoreBlockedHTML = hasMoreBlocked ? `
+                <div class="load-more-container">
+                    <button class="btn btn-secondary load-more-btn" id="load-more-blocked">
+                        Load More (${allBlocked.length - visibleBlockedCount} remaining)
+                    </button>
+                </div>
+            ` : '';
+
             sectionsHTML += `
                 <div class="section-header mt-3">
                     <h3>Blocked Content</h3>
+                    <span class="section-count">${visibleBlocked.length} of ${allBlocked.length}</span>
                 </div>
-                <div class="list">
-                    ${data.blocked.map(item => `
-                        <div class="list-item">
-                            <div>${this.escapeHtml(item.path)}</div>
-                            <div class="mt-1 text-muted"><small>Blocked by: ${this.escapeHtml(item.blocked_by)}</small></div>
-                        </div>
-                    `).join('')}
+                <div class="list" id="blocked-content-container">
+                    ${blockedHTML}
                 </div>
+                ${loadMoreBlockedHTML}
             `;
         }
 
@@ -1684,6 +1974,37 @@ class Dashboard {
                 ${sectionsHTML}
             </div>
         `;
+
+        // Attach Load More event handlers
+        this.attachReleasesLoadMoreHandlers();
+    }
+
+    // Attach Load More button handlers for releases view
+    attachReleasesLoadMoreHandlers() {
+        const loadMoreGroups = document.getElementById('load-more-groups');
+        const loadMoreStaged = document.getElementById('load-more-staged');
+        const loadMoreBlocked = document.getElementById('load-more-blocked');
+
+        if (loadMoreGroups) {
+            loadMoreGroups.addEventListener('click', () => {
+                this.releasesState.groupsPage++;
+                this.renderReleases();
+            });
+        }
+
+        if (loadMoreStaged) {
+            loadMoreStaged.addEventListener('click', () => {
+                this.releasesState.stagedPage++;
+                this.renderReleases();
+            });
+        }
+
+        if (loadMoreBlocked) {
+            loadMoreBlocked.addEventListener('click', () => {
+                this.releasesState.blockedPage++;
+                this.renderReleases();
+            });
+        }
     }
 
     async renderAssets() {
@@ -2692,30 +3013,6 @@ class Dashboard {
     async renderCalendar() {
         const content = document.getElementById('content');
 
-        let episodesResult, releaseQueueResult;
-        try {
-            [episodesResult, releaseQueueResult] = await Promise.all([
-                this.fetchAPI('/episodes'),
-                this.fetchAPI('/releases').catch(err => {
-                    console.warn('Failed to load release queue:', err);
-                    return { success: false, data: {} };
-                })
-            ]);
-        } catch (error) {
-            content.innerHTML = `<div class="error">Failed to load calendar data: ${this.escapeHtml(error.message)}</div>`;
-            return;
-        }
-
-        if (!episodesResult.success) {
-            content.innerHTML = '<div class="error">Failed to load episodes</div>';
-            return;
-        }
-
-        // Show warning if release queue failed but episodes loaded
-        const releaseQueueWarning = !releaseQueueResult.success
-            ? '<div class="warning" style="margin-bottom: 1rem; padding: 0.5rem; background: var(--warning); color: var(--background); border-radius: 4px;">Warning: Release queue data unavailable. Some scheduled releases may not appear.</div>'
-            : '';
-
         // Initialize calendar state
         if (!this.calendarState) {
             this.calendarState = {
@@ -2725,18 +3022,78 @@ class Dashboard {
             };
         }
 
-        const releaseQueue = releaseQueueResult.success ? releaseQueueResult.data : {};
-        const releaseGroups = releaseQueue.release_groups || {};
+        // Check if we have cached data for the current month range
+        const currentMonthKey = this.getMonthKey(this.calendarState.currentDate);
+        const cacheKey = MemoCache.generateKey('calendar', {
+            month: currentMonthKey,
+            filter: this.calendarState.filter
+        });
 
-        // Collect all release dates from episodes and release queue
-        const releaseItems = this.collectReleaseItems(episodesResult.episodes, releaseQueue);
+        let cachedCalendarData = this.memoCache.get(cacheKey);
 
-        // Cache release items for use in modals (avoids refetching)
-        this._cachedReleaseItems = releaseItems;
-        this._cachedReleaseGroups = releaseGroups;
+        if (!cachedCalendarData) {
+            // Show loading state for initial load
+            content.innerHTML = '<div class="loading">Loading calendar data...</div>';
 
-        // Filter items based on current filter
-        const filteredItems = this.filterReleaseItems(releaseItems, this.calendarState.filter);
+            let episodesResult, releaseQueueResult;
+            try {
+                [episodesResult, releaseQueueResult] = await Promise.all([
+                    this.fetchAPI('/episodes'),
+                    this.fetchAPI('/releases').catch(err => {
+                        console.warn('Failed to load release queue:', err);
+                        return { success: false, data: {} };
+                    })
+                ]);
+            } catch (error) {
+                content.innerHTML = `<div class="error">Failed to load calendar data: ${this.escapeHtml(error.message)}</div>`;
+                return;
+            }
+
+            if (!episodesResult.success) {
+                content.innerHTML = '<div class="error">Failed to load episodes</div>';
+                return;
+            }
+
+            const releaseQueue = releaseQueueResult.success ? releaseQueueResult.data : {};
+            const releaseGroups = releaseQueue.release_groups || {};
+
+            // Collect all release dates from episodes and release queue
+            const releaseItems = this.collectReleaseItems(episodesResult.episodes, releaseQueue);
+
+            // Cache release items for use in modals (avoids refetching)
+            this._cachedReleaseItems = releaseItems;
+            this._cachedReleaseGroups = releaseGroups;
+
+            // Filter items based on current filter
+            const filteredItems = this.filterReleaseItems(releaseItems, this.calendarState.filter);
+
+            // Get items for visible months only (lazy loading optimization)
+            const { CALENDAR_MONTHS_AHEAD, CALENDAR_MONTHS_BEHIND } = DASHBOARD_CONFIG.LAZY_LOADING;
+            const visibleMonthItems = this.getItemsForMonthRange(
+                filteredItems,
+                this.calendarState.currentDate,
+                CALENDAR_MONTHS_BEHIND,
+                CALENDAR_MONTHS_AHEAD
+            );
+
+            cachedCalendarData = {
+                allItems: releaseItems,
+                filteredItems,
+                visibleMonthItems,
+                releaseGroups,
+                releaseQueueSuccess: releaseQueueResult.success
+            };
+
+            // Cache the computed data
+            this.memoCache.set(cacheKey, cachedCalendarData);
+        }
+
+        const { visibleMonthItems, releaseGroups, releaseQueueSuccess, filteredItems } = cachedCalendarData;
+
+        // Show warning if release queue failed but episodes loaded
+        const releaseQueueWarning = !releaseQueueSuccess
+            ? '<div class="warning" style="margin-bottom: 1rem; padding: 0.5rem; background: var(--warning); color: var(--background); border-radius: 4px;">Warning: Release queue data unavailable. Some scheduled releases may not appear.</div>'
+            : '';
 
         content.innerHTML = `
             <div class="view">
@@ -2763,7 +3120,7 @@ class Dashboard {
 
                 <div id="calendar-content">
                     ${this.calendarState.viewMode === 'calendar'
-                        ? this.renderCalendarView(filteredItems, releaseGroups)
+                        ? this.renderCalendarView(visibleMonthItems, releaseGroups)
                         : this.renderListView(filteredItems, releaseGroups)}
                 </div>
             </div>
@@ -2771,6 +3128,24 @@ class Dashboard {
 
         // Attach event listeners
         this.attachCalendarListeners();
+    }
+
+    // Get a month key in YYYY-MM format for caching
+    getMonthKey(date) {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        return `${year}-${month}`;
+    }
+
+    // Get items that fall within a month range (for lazy loading)
+    getItemsForMonthRange(items, centerDate, monthsBefore, monthsAfter) {
+        const startDate = new Date(centerDate.getFullYear(), centerDate.getMonth() - monthsBefore, 1);
+        const endDate = new Date(centerDate.getFullYear(), centerDate.getMonth() + monthsAfter + 1, 0);
+
+        return items.filter(item => {
+            const itemDate = item.date;
+            return itemDate >= startDate && itemDate <= endDate;
+        });
     }
 
     collectReleaseItems(episodes, releaseQueue) {

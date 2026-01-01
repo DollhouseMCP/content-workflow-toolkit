@@ -89,6 +89,83 @@ describe('API Functional Tests', () => {
       assert.ok(Array.isArray(data.episodes), 'episodes should be an array');
       assert.ok(typeof data.count === 'number', 'count should be a number');
     });
+
+    test('episodes contain metadata structure for calendar', async () => {
+      const { status, data } = await apiRequest('/api/episodes');
+
+      assert.strictEqual(status, 200);
+      assert.strictEqual(data.success, true);
+
+      // Check that episodes have the structure calendar needs
+      if (data.episodes.length > 0) {
+        for (const episode of data.episodes) {
+          // Each episode should have path, series, and episode identifiers
+          assert.ok(episode.path, 'episode should have path');
+          assert.ok(episode.series, 'episode should have series');
+          assert.ok(episode.episode, 'episode should have episode name');
+
+          // metadata should exist
+          assert.ok(episode.metadata, 'episode should have metadata');
+
+          // If release info exists, validate structure used by calendar
+          if (episode.metadata.release) {
+            const release = episode.metadata.release;
+
+            // target_date should be string if present (YYYY-MM-DD format)
+            if (release.target_date !== undefined && release.target_date !== null && release.target_date !== '') {
+              assert.ok(typeof release.target_date === 'string', 'target_date should be string');
+            }
+
+            // release_group should be string if present
+            if (release.release_group !== undefined && release.release_group !== null && release.release_group !== '') {
+              assert.ok(typeof release.release_group === 'string', 'release_group should be string');
+            }
+          }
+
+          // If analytics info exists, validate publish_date used by calendar
+          if (episode.metadata.analytics) {
+            const analytics = episode.metadata.analytics;
+
+            // publish_date is used to show released episodes on calendar
+            if (analytics.publish_date !== undefined && analytics.publish_date !== null && analytics.publish_date !== '') {
+              assert.ok(typeof analytics.publish_date === 'string', 'publish_date should be string');
+            }
+          }
+        }
+      }
+    });
+
+    test('episode date format is consistent for calendar parsing', async () => {
+      const { status, data } = await apiRequest('/api/episodes');
+
+      assert.strictEqual(status, 200);
+
+      // The calendar parseDate function expects dates in ISO format or YYYY-MM-DD
+      // Validate any dates in episodes match expected formats
+      const dateRegex = /^\d{4}-\d{2}-\d{2}(T[\d:.-]+)?$/;
+
+      for (const episode of data.episodes) {
+        if (episode.metadata?.release?.target_date) {
+          const targetDate = episode.metadata.release.target_date;
+          if (targetDate) {
+            assert.ok(
+              dateRegex.test(targetDate),
+              `target_date "${targetDate}" should match YYYY-MM-DD or ISO format`
+            );
+          }
+        }
+
+        if (episode.metadata?.analytics?.publish_date) {
+          const publishDate = episode.metadata.analytics.publish_date;
+          if (publishDate) {
+            assert.ok(
+              dateRegex.test(publishDate),
+              `publish_date "${publishDate}" should match YYYY-MM-DD or ISO format`
+            );
+          }
+        }
+      }
+    });
   });
 
   describe('GET /api/releases', () => {
@@ -98,6 +175,125 @@ describe('API Functional Tests', () => {
       assert.strictEqual(status, 200);
       assert.strictEqual(data.success, true);
       assert.ok(data.data, 'should have data field');
+    });
+
+    test('release queue contains expected sections for calendar', async () => {
+      const { status, data } = await apiRequest('/api/releases');
+
+      assert.strictEqual(status, 200);
+      assert.strictEqual(data.success, true);
+
+      // Calendar view expects these sections to exist (may be empty arrays/objects)
+      // The release queue YAML structure includes: release_groups, staged, blocked, released
+      const releaseQueue = data.data;
+
+      // release_groups should be an object (can be empty or contain release groups)
+      if (releaseQueue.release_groups !== undefined) {
+        assert.strictEqual(typeof releaseQueue.release_groups, 'object', 'release_groups should be an object');
+      }
+
+      // staged should be an array if present
+      if (releaseQueue.staged !== undefined) {
+        assert.ok(Array.isArray(releaseQueue.staged), 'staged should be an array');
+      }
+
+      // blocked should be an array if present
+      if (releaseQueue.blocked !== undefined) {
+        assert.ok(Array.isArray(releaseQueue.blocked), 'blocked should be an array');
+      }
+
+      // released should be an array if present
+      if (releaseQueue.released !== undefined) {
+        assert.ok(Array.isArray(releaseQueue.released), 'released should be an array');
+      }
+    });
+
+    test('release groups have required fields for calendar display', async () => {
+      const { status, data } = await apiRequest('/api/releases');
+
+      assert.strictEqual(status, 200);
+      const releaseQueue = data.data;
+
+      if (releaseQueue.release_groups) {
+        for (const [groupId, group] of Object.entries(releaseQueue.release_groups)) {
+          // Each release group should have name and status for calendar display
+          assert.ok(group.name, `release group ${groupId} should have name`);
+          assert.ok(group.status, `release group ${groupId} should have status`);
+
+          // target_date is used by calendar for scheduling
+          // Can be undefined but if present should be a valid date string
+          if (group.target_date) {
+            assert.ok(typeof group.target_date === 'string', `release group ${groupId} target_date should be string`);
+          }
+
+          // items array contains content to be released
+          if (group.items) {
+            assert.ok(Array.isArray(group.items), `release group ${groupId} items should be array`);
+          }
+        }
+      }
+    });
+
+    test('staged items have required fields for calendar display', async () => {
+      const { status, data } = await apiRequest('/api/releases');
+
+      assert.strictEqual(status, 200);
+      const releaseQueue = data.data;
+
+      if (releaseQueue.staged && releaseQueue.staged.length > 0) {
+        for (const item of releaseQueue.staged) {
+          // path is required to identify the content
+          assert.ok(item.path, 'staged item should have path');
+
+          // status helps calendar categorize items
+          if (item.status) {
+            assert.ok(typeof item.status === 'string', 'staged item status should be string');
+          }
+
+          // target_date is used for calendar positioning
+          if (item.target_date) {
+            assert.ok(typeof item.target_date === 'string', 'staged item target_date should be string');
+          }
+        }
+      }
+    });
+
+    test('blocked items have required fields', async () => {
+      const { status, data } = await apiRequest('/api/releases');
+
+      assert.strictEqual(status, 200);
+      const releaseQueue = data.data;
+
+      if (releaseQueue.blocked && releaseQueue.blocked.length > 0) {
+        for (const item of releaseQueue.blocked) {
+          // path identifies the blocked content
+          assert.ok(item.path, 'blocked item should have path');
+
+          // blocked_by explains why content is blocked
+          if (item.blocked_by) {
+            assert.ok(typeof item.blocked_by === 'string', 'blocked_by should be string');
+          }
+        }
+      }
+    });
+
+    test('released items have release_date for calendar history', async () => {
+      const { status, data } = await apiRequest('/api/releases');
+
+      assert.strictEqual(status, 200);
+      const releaseQueue = data.data;
+
+      if (releaseQueue.released && releaseQueue.released.length > 0) {
+        for (const item of releaseQueue.released) {
+          // path identifies the released content
+          assert.ok(item.path, 'released item should have path');
+
+          // release_date is essential for showing when content was released
+          if (item.release_date) {
+            assert.ok(typeof item.release_date === 'string', 'release_date should be string');
+          }
+        }
+      }
     });
   });
 
@@ -924,6 +1120,235 @@ describe('API Functional Tests', () => {
         assert.strictEqual(status, 400);
         assert.strictEqual(data.success, false);
         assert.ok(data.error.includes('Invalid request body'), 'error should mention invalid request body');
+      });
+    });
+  });
+
+  describe('Calendar Feature Tests', () => {
+    const calendarTestSeries = 'calendar-test-series';
+    let calendarTestEpisode = null;
+
+    after(async () => {
+      // Clean up calendar test series
+      try {
+        await fs.rm(path.join(testSeriesDir, calendarTestSeries), { recursive: true, force: true });
+      } catch (err) {
+        // Ignore cleanup errors
+      }
+    });
+
+    describe('Episode creation with target date', () => {
+      test('creates episode with valid target date for calendar', async () => {
+        const futureDate = '2025-06-15';
+        const { status, data } = await apiRequest('/api/episodes', {
+          method: 'POST',
+          body: JSON.stringify({
+            series: calendarTestSeries,
+            topic: 'calendar-target-date',
+            title: 'Calendar Target Date Test',
+            description: 'Episode with target date for calendar display',
+            targetDate: futureDate
+          })
+        });
+
+        assert.strictEqual(status, 201);
+        assert.strictEqual(data.success, true);
+        assert.strictEqual(data.episode.targetDate, futureDate);
+
+        calendarTestEpisode = data.episode.episode;
+      });
+
+      test('created episode appears in episodes list with target date', async () => {
+        if (!calendarTestEpisode) return;
+
+        const { status, data } = await apiRequest('/api/episodes');
+
+        assert.strictEqual(status, 200);
+
+        // Find the created episode
+        const createdEpisode = data.episodes.find(
+          ep => ep.series === calendarTestSeries && ep.episode === calendarTestEpisode
+        );
+
+        assert.ok(createdEpisode, 'created episode should appear in list');
+        assert.ok(createdEpisode.metadata.release, 'episode should have release metadata');
+        assert.strictEqual(createdEpisode.metadata.release.target_date, '2025-06-15');
+      });
+    });
+
+    describe('Updating release dates via PATCH', () => {
+      test('updates target_date for calendar scheduling', async () => {
+        if (!calendarTestEpisode) return;
+
+        const newDate = '2025-07-20';
+        const { status, data } = await apiRequest(`/api/episodes/${calendarTestSeries}/${calendarTestEpisode}`, {
+          method: 'PATCH',
+          body: JSON.stringify({
+            release: {
+              target_date: newDate
+            }
+          })
+        });
+
+        assert.strictEqual(status, 200);
+        assert.strictEqual(data.success, true);
+        assert.strictEqual(data.metadata.release.target_date, newDate);
+      });
+
+      test('clears target_date when set to empty string', async () => {
+        if (!calendarTestEpisode) return;
+
+        const { status, data } = await apiRequest(`/api/episodes/${calendarTestSeries}/${calendarTestEpisode}`, {
+          method: 'PATCH',
+          body: JSON.stringify({
+            release: {
+              target_date: ''
+            }
+          })
+        });
+
+        assert.strictEqual(status, 200);
+        assert.strictEqual(data.success, true);
+        assert.strictEqual(data.metadata.release.target_date, '');
+      });
+
+      test('sets release_group for calendar grouping', async () => {
+        if (!calendarTestEpisode) return;
+
+        const { status, data } = await apiRequest(`/api/episodes/${calendarTestSeries}/${calendarTestEpisode}`, {
+          method: 'PATCH',
+          body: JSON.stringify({
+            release: {
+              target_date: '2025-08-01',
+              release_group: 'calendar-test-group'
+            }
+          })
+        });
+
+        assert.strictEqual(status, 200);
+        assert.strictEqual(data.success, true);
+        assert.strictEqual(data.metadata.release.release_group, 'calendar-test-group');
+      });
+
+      test('rejects invalid date format for target_date', async () => {
+        if (!calendarTestEpisode) return;
+
+        const { status, data } = await apiRequest(`/api/episodes/${calendarTestSeries}/${calendarTestEpisode}`, {
+          method: 'PATCH',
+          body: JSON.stringify({
+            release: {
+              target_date: 'not-a-date'
+            }
+          })
+        });
+
+        assert.strictEqual(status, 400);
+        assert.strictEqual(data.success, false);
+        assert.ok(data.errors.some(e => e.includes('date')), 'should have date format error');
+      });
+
+      test('rejects impossible date in target_date', async () => {
+        if (!calendarTestEpisode) return;
+
+        const { status, data } = await apiRequest(`/api/episodes/${calendarTestSeries}/${calendarTestEpisode}`, {
+          method: 'PATCH',
+          body: JSON.stringify({
+            release: {
+              target_date: '2025-02-30'  // February 30 doesn't exist
+            }
+          })
+        });
+
+        assert.strictEqual(status, 400);
+        assert.strictEqual(data.success, false);
+      });
+    });
+
+    describe('Distribution profiles for calendar', () => {
+      test('distribution endpoint returns profiles for calendar release options', async () => {
+        const { status, data } = await apiRequest('/api/distribution');
+
+        assert.strictEqual(status, 200);
+        assert.strictEqual(data.success, true);
+        assert.ok(data.data, 'should have data field');
+
+        // Calendar uses distribution profiles for release planning
+        if (data.data.profiles) {
+          assert.strictEqual(typeof data.data.profiles, 'object', 'profiles should be an object');
+
+          // Each profile should have description and platforms for calendar display
+          for (const [profileId, profile] of Object.entries(data.data.profiles)) {
+            // Profiles use 'description' field (not 'name')
+            assert.ok(profile.description, `profile ${profileId} should have description`);
+            if (profile.platforms) {
+              assert.ok(Array.isArray(profile.platforms), `profile ${profileId} platforms should be array`);
+            }
+          }
+        }
+      });
+    });
+
+    describe('Combined calendar data consistency', () => {
+      test('release queue dates match expected ISO or YYYY-MM-DD format', async () => {
+        const { status, data } = await apiRequest('/api/releases');
+
+        assert.strictEqual(status, 200);
+
+        const releaseQueue = data.data;
+        // Date formats: YYYY-MM-DD or ISO 8601 (js-yaml converts datetime to ISO format like 2025-01-15T17:00:00.000Z)
+        const dateRegex = /^\d{4}-\d{2}-\d{2}(T[\d:.]+Z?)?$/;
+
+        // Check release_groups target_date
+        if (releaseQueue.release_groups) {
+          for (const [id, group] of Object.entries(releaseQueue.release_groups)) {
+            if (group.target_date) {
+              assert.ok(
+                dateRegex.test(group.target_date),
+                `release_group ${id} target_date should match date format`
+              );
+            }
+          }
+        }
+
+        // Check staged items target_date
+        if (releaseQueue.staged) {
+          for (const item of releaseQueue.staged) {
+            if (item.target_date) {
+              assert.ok(
+                dateRegex.test(item.target_date),
+                `staged item target_date should match date format`
+              );
+            }
+          }
+        }
+
+        // Check released items release_date
+        if (releaseQueue.released) {
+          for (const item of releaseQueue.released) {
+            if (item.release_date) {
+              assert.ok(
+                dateRegex.test(item.release_date),
+                `released item release_date should match date format`
+              );
+            }
+          }
+        }
+      });
+
+      test('episode target dates in metadata are parseable for calendar', async () => {
+        const { status, data } = await apiRequest('/api/episodes');
+
+        assert.strictEqual(status, 200);
+
+        for (const episode of data.episodes) {
+          const targetDate = episode.metadata?.release?.target_date;
+
+          if (targetDate && targetDate !== '') {
+            // Verify the date is parseable by JavaScript Date
+            const parsed = new Date(targetDate);
+            assert.ok(!isNaN(parsed.getTime()), `target_date "${targetDate}" should be parseable`);
+          }
+        }
       });
     });
   });

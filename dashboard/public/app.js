@@ -36,11 +36,47 @@ class Dashboard {
     }
 
     async init() {
+        this.setupGlobalErrorHandlers();
         this.setupMarkdown();
         this.setupEventListeners();
         this.setupLiveReload();
         await this.loadInitialData();
         await this.loadView('pipeline');
+    }
+
+    setupGlobalErrorHandlers() {
+        // Handle uncaught errors
+        window.onerror = (message, source, lineno, colno, error) => {
+            console.error('Uncaught error:', {
+                message,
+                source,
+                lineno,
+                colno,
+                error: error?.stack || error
+            });
+
+            // Show user-friendly message for significant errors
+            if (!message.includes('Script error')) {
+                this.showErrorBanner('An unexpected error occurred. Please try again.');
+            }
+
+            return false; // Allow default browser handling
+        };
+
+        // Handle unhandled promise rejections
+        window.onunhandledrejection = (event) => {
+            console.error('Unhandled promise rejection:', {
+                reason: event.reason,
+                stack: event.reason?.stack
+            });
+
+            // Show user-friendly message
+            const message = event.reason?.message || 'An unexpected error occurred';
+            if (!message.includes('API error')) {
+                // API errors are already handled by fetchAPI
+                this.showErrorBanner('Something went wrong. Please try again.');
+            }
+        };
     }
 
     async loadInitialData() {
@@ -153,9 +189,28 @@ class Dashboard {
     }
 
     setupLiveReload() {
-        const eventSource = new EventSource('/api/events');
+        this.sseReconnectAttempts = 0;
+        this.maxSSEReconnectAttempts = 10;
+        this.sseBaseReconnectDelay = 1000;
+        this.eventSource = null;
 
-        eventSource.onmessage = (event) => {
+        this.connectSSE();
+    }
+
+    connectSSE() {
+        if (this.eventSource) {
+            this.eventSource.close();
+        }
+
+        this.eventSource = new EventSource('/api/events');
+
+        this.eventSource.onopen = () => {
+            console.log('SSE connection established');
+            this.sseReconnectAttempts = 0;
+            this.updateConnectionStatus('connected');
+        };
+
+        this.eventSource.onmessage = (event) => {
             const data = JSON.parse(event.data);
             if (data.type === 'reload') {
                 console.log('Content changed, reloading view...');
@@ -163,11 +218,102 @@ class Dashboard {
             }
         };
 
-        eventSource.onerror = () => {
+        this.eventSource.onerror = () => {
             console.error('SSE connection error');
-            document.getElementById('connection-status').innerHTML =
-                '<span class="dot" style="background-color: var(--error);"></span> Disconnected';
+            this.eventSource.close();
+
+            if (this.sseReconnectAttempts < this.maxSSEReconnectAttempts) {
+                this.sseReconnectAttempts++;
+                const delay = Math.min(
+                    this.sseBaseReconnectDelay * Math.pow(2, this.sseReconnectAttempts - 1),
+                    30000 // Cap at 30 seconds
+                );
+
+                this.updateConnectionStatus('reconnecting', this.sseReconnectAttempts);
+                console.log(`SSE reconnecting in ${delay}ms (attempt ${this.sseReconnectAttempts}/${this.maxSSEReconnectAttempts})`);
+
+                setTimeout(() => this.connectSSE(), delay);
+            } else {
+                this.updateConnectionStatus('disconnected');
+                console.error('SSE max reconnection attempts reached');
+                this.showErrorBanner(
+                    'Connection lost. Please refresh the page to reconnect.',
+                    () => window.location.reload()
+                );
+            }
         };
+    }
+
+    updateConnectionStatus(status, attempt = 0) {
+        const statusEl = document.getElementById('connection-status');
+        if (!statusEl) return;
+
+        switch (status) {
+            case 'connected':
+                statusEl.innerHTML = '<span class="dot"></span> Connected';
+                break;
+            case 'reconnecting':
+                statusEl.innerHTML = `<span class="dot" style="background-color: var(--warning);"></span> Reconnecting (${attempt}/${this.maxSSEReconnectAttempts})...`;
+                break;
+            case 'disconnected':
+                statusEl.innerHTML = '<span class="dot" style="background-color: var(--error);"></span> Disconnected';
+                break;
+        }
+    }
+
+    showErrorBanner(message, retryFn = null) {
+        // Remove any existing error banner
+        this.hideErrorBanner();
+
+        const banner = document.createElement('div');
+        banner.id = 'error-banner';
+        banner.className = 'error-banner';
+
+        const messageSpan = document.createElement('span');
+        messageSpan.className = 'error-banner-message';
+        messageSpan.textContent = message;
+        banner.appendChild(messageSpan);
+
+        const actionsDiv = document.createElement('div');
+        actionsDiv.className = 'error-banner-actions';
+
+        if (retryFn) {
+            const retryBtn = document.createElement('button');
+            retryBtn.className = 'error-banner-retry';
+            retryBtn.textContent = 'Retry';
+            retryBtn.addEventListener('click', () => {
+                this.hideErrorBanner();
+                retryFn();
+            });
+            actionsDiv.appendChild(retryBtn);
+        }
+
+        const dismissBtn = document.createElement('button');
+        dismissBtn.className = 'error-banner-dismiss';
+        dismissBtn.textContent = 'Dismiss';
+        dismissBtn.addEventListener('click', () => this.hideErrorBanner());
+        actionsDiv.appendChild(dismissBtn);
+
+        banner.appendChild(actionsDiv);
+        document.body.appendChild(banner);
+
+        // Auto-dismiss after 10 seconds if no retry function
+        if (!retryFn) {
+            this.errorBannerTimeout = setTimeout(() => this.hideErrorBanner(), 10000);
+        }
+    }
+
+    hideErrorBanner() {
+        if (this.errorBannerTimeout) {
+            clearTimeout(this.errorBannerTimeout);
+            this.errorBannerTimeout = null;
+        }
+
+        const banner = document.getElementById('error-banner');
+        if (banner) {
+            banner.classList.add('error-banner-hiding');
+            setTimeout(() => banner.remove(), 300);
+        }
     }
 
     switchView(view) {
@@ -218,12 +364,50 @@ class Dashboard {
         }
     }
 
-    async fetchAPI(endpoint) {
-        const response = await fetch(`/api${endpoint}`);
-        if (!response.ok) {
-            throw new Error(`API error: ${response.statusText}`);
+    async fetchAPI(endpoint, options = {}) {
+        const maxRetries = 3;
+        const baseDelay = 1000; // 1 second
+
+        for (let attempt = 0; attempt <= maxRetries; attempt++) {
+            try {
+                const response = await fetch(`/api${endpoint}`, options);
+
+                // Don't retry client errors (4xx)
+                if (response.status >= 400 && response.status < 500) {
+                    throw new Error(`API error: ${response.statusText}`);
+                }
+
+                // Retry server errors (5xx)
+                if (response.status >= 500) {
+                    if (attempt < maxRetries) {
+                        const delay = baseDelay * Math.pow(2, attempt); // 1s, 2s, 4s
+                        console.warn(`Server error (${response.status}), retrying in ${delay}ms... (attempt ${attempt + 1}/${maxRetries})`);
+                        await this.sleep(delay);
+                        continue;
+                    }
+                    throw new Error(`API error: ${response.statusText} (after ${maxRetries} retries)`);
+                }
+
+                if (!response.ok) {
+                    throw new Error(`API error: ${response.statusText}`);
+                }
+
+                return await response.json();
+            } catch (error) {
+                // Network errors - retry with backoff
+                if (error.name === 'TypeError' && attempt < maxRetries) {
+                    const delay = baseDelay * Math.pow(2, attempt);
+                    console.warn(`Network error, retrying in ${delay}ms... (attempt ${attempt + 1}/${maxRetries})`);
+                    await this.sleep(delay);
+                    continue;
+                }
+                throw error;
+            }
         }
-        return await response.json();
+    }
+
+    sleep(ms) {
+        return new Promise(resolve => setTimeout(resolve, ms));
     }
 
     async renderPipeline() {

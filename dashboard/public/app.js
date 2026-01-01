@@ -388,12 +388,14 @@ class Dashboard {
                 const currentStatus = badge.dataset.currentStatus;
 
                 // Create dropdown
+                // Note: Status values are hardcoded (not user input), so XSS is not a concern here
+                // Using escapeHtml for defense-in-depth
                 const dropdown = document.createElement('div');
                 dropdown.className = 'status-dropdown';
                 dropdown.innerHTML = ['draft', 'ready', 'staged', 'released'].map(status => `
-                    <div class="status-dropdown-item ${status === currentStatus ? 'active' : ''}" data-status="${status}">
-                        <span class="status-dot ${status}"></span>
-                        <span>${status}</span>
+                    <div class="status-dropdown-item ${status === currentStatus ? 'active' : ''}" data-status="${this.escapeHtml(status)}">
+                        <span class="status-dot ${this.escapeHtml(status)}"></span>
+                        <span>${this.escapeHtml(status)}</span>
                     </div>
                 `).join('');
 
@@ -412,12 +414,18 @@ class Dashboard {
                 });
 
                 // Close dropdown when clicking outside
+                // Use setTimeout to avoid immediately triggering the handler from this click
                 setTimeout(() => {
-                    document.addEventListener('click', this._statusDropdownCloseHandler = (e) => {
+                    // Remove any existing listener before adding a new one (prevents memory leak)
+                    if (this._statusDropdownCloseHandler) {
+                        document.removeEventListener('click', this._statusDropdownCloseHandler);
+                    }
+                    this._statusDropdownCloseHandler = (e) => {
                         if (!e.target.closest('.status-dropdown') && !e.target.closest('.status-badge-clickable')) {
                             this.closeStatusDropdowns();
                         }
-                    });
+                    };
+                    document.addEventListener('click', this._statusDropdownCloseHandler);
                 }, 0);
             });
         });

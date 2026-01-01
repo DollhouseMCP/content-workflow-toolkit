@@ -17,6 +17,7 @@ const DASHBOARD_CONFIG = {
 
     // Asset management
     MAX_UPLOAD_SIZE_MB: 100,
+    SEARCH_DEBOUNCE_DELAY: 300,
     ALLOWED_UPLOAD_EXTENSIONS: [
         '.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg', '.bmp', '.ico',
         '.mp4', '.mov', '.webm', '.avi', '.mkv', '.m4v',
@@ -1905,6 +1906,19 @@ class Dashboard {
         return false;
     }
 
+    /**
+     * Updates only the asset tree view without re-rendering the entire asset browser.
+     * This preserves the search input focus and cursor position.
+     */
+    updateAssetTreeView() {
+        const assetTree = document.getElementById('asset-tree');
+        if (!assetTree || !this._assetTreeData) {
+            return;
+        }
+
+        assetTree.innerHTML = this.renderAssetTree(this._assetTreeData);
+    }
+
     renderAssetPreview(file) {
         if (!file) {
             return `
@@ -2113,19 +2127,30 @@ class Dashboard {
             }
         };
 
-        // Create delegated input handler (for search)
+        // Create delegated input handler (for search) with debounce
+        // This updates only the tree view to preserve search input focus
         this._assetInputHandler = (e) => {
             if (e.target.id === 'asset-search') {
                 this.assetBrowserState.searchQuery = e.target.value;
-                this.renderAssets();
+
+                // Clear any existing debounce timer
+                if (this._searchDebounceTimer) {
+                    clearTimeout(this._searchDebounceTimer);
+                }
+
+                // Debounce the tree update to avoid excessive re-renders
+                this._searchDebounceTimer = setTimeout(() => {
+                    this.updateAssetTreeView();
+                }, DASHBOARD_CONFIG.SEARCH_DEBOUNCE_DELAY);
             }
         };
 
         // Create delegated change handler (for type filter)
+        // This updates only the tree view for better performance
         this._assetChangeHandler = (e) => {
             if (e.target.id === 'asset-type-filter') {
                 this.assetBrowserState.filterType = e.target.value;
-                this.renderAssets();
+                this.updateAssetTreeView();
             }
         };
 

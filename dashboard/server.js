@@ -144,7 +144,7 @@ const MAX_SSE_CONNECTIONS = 50; // Maximum concurrent SSE connections
 app.get('/api/events', (req, res) => {
   // Limit concurrent SSE connections to prevent resource exhaustion
   if (clients.length >= MAX_SSE_CONNECTIONS) {
-    return res.status(503).json({
+    return res.status(429).json({
       error: 'Too many connections',
       message: 'Maximum SSE connections reached. Please try again later.'
     });

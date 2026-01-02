@@ -161,6 +161,7 @@ let cachedMetadataTemplate = null;
 /**
  * Returns a deep clone of the cached metadata template.
  * Loads the template from disk on first call and caches it for subsequent requests.
+ * If the template file doesn't exist, returns a default template with basic structure.
  * @async
  * @returns {Promise<Object>} A deep clone of the metadata template object
  * @example
@@ -309,7 +310,7 @@ function slugify(text) {
  * Uses the local timezone for date calculation.
  * @returns {string} The current date formatted as YYYY-MM-DD
  * @example
- * getCurrentDate() // Returns '2026-01-02' (current date)
+ * getCurrentDate() // Returns '2026-01-02' (example output)
  */
 function getCurrentDate() {
   const now = new Date();

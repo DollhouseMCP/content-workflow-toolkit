@@ -6,7 +6,8 @@ import {
   getReleaseQueue,
   readYamlFile,
   writeYamlFile,
-  RELEASE_QUEUE_PATH
+  RELEASE_QUEUE_PATH,
+  isPathWithinSeries
 } from '../utils.js';
 import type { ReleaseQueue, ReleaseQueueItem, EpisodeMetadata } from '../types.js';
 
@@ -46,20 +47,18 @@ export async function updateReleaseStatus(
       };
     }
 
-    // Validate path (prevent traversal)
-    if (episodePath.includes('..')) {
-      return { success: false, error: 'Invalid path' };
+    // Normalize path - strip 'series/' prefix if present
+    const normalizedEpisodePath = episodePath.startsWith('series/')
+      ? episodePath.slice(7) // Remove 'series/' prefix
+      : episodePath;
+
+    // Validate path is within series directory (prevent traversal)
+    if (!isPathWithinSeries(normalizedEpisodePath)) {
+      return { success: false, error: 'Invalid path - must be within series directory' };
     }
 
     // Construct the metadata path
-    // The path can be relative like "series/sample-series/2025-01-01-episode"
-    // or just "sample-series/2025-01-01-episode"
-    let metadataPath: string;
-    if (episodePath.startsWith('series/')) {
-      metadataPath = path.join(SERIES_DIR, '..', episodePath, 'metadata.yml');
-    } else {
-      metadataPath = path.join(SERIES_DIR, episodePath, 'metadata.yml');
-    }
+    const metadataPath = path.join(SERIES_DIR, normalizedEpisodePath, 'metadata.yml');
 
     // Read and update metadata
     const metadata = await readYamlFile<EpisodeMetadata>(metadataPath);
@@ -94,18 +93,21 @@ export async function scheduleRelease(
       };
     }
 
-    // Validate path
-    if (episodePath.includes('..')) {
-      return { success: false, error: 'Invalid path' };
+    // Normalize path - strip 'series/' prefix if present for validation
+    const pathForValidation = episodePath.startsWith('series/')
+      ? episodePath.slice(7) // Remove 'series/' prefix
+      : episodePath;
+
+    // Validate path is within series directory (prevent traversal)
+    if (!isPathWithinSeries(pathForValidation)) {
+      return { success: false, error: 'Invalid path - must be within series directory' };
     }
 
     // Read current release queue
     const releaseQueue = await getReleaseQueue();
 
-    // Normalize the path format
-    const normalizedPath = episodePath.startsWith('series/')
-      ? episodePath
-      : `series/${episodePath}`;
+    // Normalize the path format for storage (always with 'series/' prefix)
+    const normalizedPath = `series/${pathForValidation}`;
 
     // Check if already in staged
     if (!releaseQueue.staged) {
@@ -156,13 +158,8 @@ export async function scheduleRelease(
     // Write updated release queue
     await writeYamlFile(RELEASE_QUEUE_PATH, releaseQueue);
 
-    // Also update the episode metadata
-    let metadataPath: string;
-    if (episodePath.startsWith('series/')) {
-      metadataPath = path.join(SERIES_DIR, '..', episodePath, 'metadata.yml');
-    } else {
-      metadataPath = path.join(SERIES_DIR, episodePath, 'metadata.yml');
-    }
+    // Also update the episode metadata (use already-validated path)
+    const metadataPath = path.join(SERIES_DIR, pathForValidation, 'metadata.yml');
 
     try {
       const metadata = await readYamlFile<EpisodeMetadata>(metadataPath);

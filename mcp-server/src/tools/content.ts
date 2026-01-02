@@ -15,7 +15,9 @@ import {
   isValidSeriesName,
   deepMerge,
   writeYamlFile,
-  readYamlFile
+  readYamlFile,
+  MAX_TITLE_LENGTH,
+  MAX_DESCRIPTION_LENGTH
 } from '../utils.js';
 import type { Episode, EpisodeMetadata, WorkflowStage, VALID_WORKFLOW_STAGES, VALID_CONTENT_STATUSES } from '../types.js';
 
@@ -55,16 +57,22 @@ export async function createEpisode(
       return { success: false, error: 'Title is required' };
     }
 
-    // Sanitize title (strip HTML tags)
+    // Sanitize title (strip HTML tags) and validate length
     const sanitizedTitle = title.replace(/<[^>]*>/g, '').trim();
     if (!sanitizedTitle) {
       return { success: false, error: 'Title cannot be empty after removing HTML tags' };
     }
+    if (sanitizedTitle.length > MAX_TITLE_LENGTH) {
+      return { success: false, error: `Title exceeds maximum length of ${MAX_TITLE_LENGTH} characters` };
+    }
 
-    // Sanitize description if provided
+    // Sanitize description if provided and validate length
     const sanitizedDescription = description
       ? description.replace(/<[^>]*>/g, '').trim()
       : '';
+    if (sanitizedDescription.length > MAX_DESCRIPTION_LENGTH) {
+      return { success: false, error: `Description exceeds maximum length of ${MAX_DESCRIPTION_LENGTH} characters` };
+    }
 
     // Create paths
     const date = getCurrentDate();

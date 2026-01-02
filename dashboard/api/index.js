@@ -201,6 +201,17 @@ async function getMetadataTemplate() {
 
 // Cached distribution profiles (loaded once at startup)
 let cachedDistributionProfiles = null;
+
+/**
+ * Returns cached distribution profiles from distribution-profiles.yml.
+ * Loads the file on first call and caches it for subsequent requests.
+ * If the file doesn't exist, returns an empty profiles object.
+ * @async
+ * @returns {Promise<Object>} The distribution profiles configuration object
+ * @example
+ * const profiles = await getDistributionProfiles();
+ * console.log(profiles.profiles); // { 'youtube': {...}, 'podcast': {...} }
+ */
 async function getDistributionProfiles() {
   if (cachedDistributionProfiles === null) {
     try {
@@ -298,7 +309,7 @@ function slugify(text) {
  * Uses the local timezone for date calculation.
  * @returns {string} The current date formatted as YYYY-MM-DD
  * @example
- * getCurrentDate() // Returns 'YYYY-MM-DD' format (e.g., '2026-01-02')
+ * getCurrentDate() // Returns '2026-01-02' (current date)
  */
 function getCurrentDate() {
   const now = new Date();

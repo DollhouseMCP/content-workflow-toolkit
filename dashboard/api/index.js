@@ -64,7 +64,7 @@ const MAX_FILE_SIZE = 100 * 1024 * 1024;
  * @returns {string} The sanitized filename with extension preserved
  * @example
  * sanitizeFilename('my file@#$.txt') // Returns 'my_file___.txt'
- * sanitizeFilename('a'.repeat(250) + '.pdf') // Returns truncated name + '.pdf'
+ * sanitizeFilename('a'.repeat(250) + '.pdf') // Returns 'aaa...(200 chars max).pdf'
  */
 function sanitizeFilename(filename) {
   // Get the extension
@@ -298,7 +298,7 @@ function slugify(text) {
  * Uses the local timezone for date calculation.
  * @returns {string} The current date formatted as YYYY-MM-DD
  * @example
- * getCurrentDate() // Returns '2024-01-15' (example)
+ * getCurrentDate() // Returns 'YYYY-MM-DD' format (e.g., '2026-01-02')
  */
 function getCurrentDate() {
   const now = new Date();

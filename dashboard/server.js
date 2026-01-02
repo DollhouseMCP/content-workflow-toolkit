@@ -28,7 +28,8 @@ app.use((req, res, next) => {
   // Prevent clickjacking attacks
   res.setHeader('X-Frame-Options', 'DENY');
 
-  // Enable XSS filter in browsers (legacy, but still useful)
+  // Legacy XSS protection for older browsers (deprecated but harmless)
+  // Modern browsers use CSP instead; kept for compatibility with older browsers
   res.setHeader('X-XSS-Protection', '1; mode=block');
 
   // Control referrer information
@@ -39,6 +40,8 @@ app.use((req, res, next) => {
 
 // Rate Limiting Middleware
 // Simple in-memory rate limiter to prevent abuse
+// Note: For production behind a proxy, configure app.set('trust proxy', 1)
+// and use X-Forwarded-For header validation. See SECURITY.md for details.
 const rateLimitStore = new Map();
 const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minute window
 const RATE_LIMIT_MAX_REQUESTS = 100; // Max requests per window
@@ -49,7 +52,8 @@ function rateLimit(req, res, next) {
     return next();
   }
 
-  const clientIP = req.ip || req.connection.remoteAddress || 'unknown';
+  // Use req.ip which respects trust proxy settings when configured
+  const clientIP = req.ip || 'unknown';
   const now = Date.now();
 
   // Get or create rate limit entry for this IP
@@ -82,7 +86,7 @@ function rateLimit(req, res, next) {
 }
 
 // Periodically clean up old rate limit entries (every 5 minutes)
-setInterval(() => {
+const rateLimitCleanupInterval = setInterval(() => {
   const now = Date.now();
   for (const [ip, data] of rateLimitStore.entries()) {
     if (now - data.windowStart > RATE_LIMIT_WINDOW_MS * 2) {
@@ -134,9 +138,18 @@ const watcher = chokidar.watch([
 
 // Store connected SSE clients for live reload
 const clients = [];
+const MAX_SSE_CONNECTIONS = 50; // Maximum concurrent SSE connections
 
 // SSE endpoint for live reload
 app.get('/api/events', (req, res) => {
+  // Limit concurrent SSE connections to prevent resource exhaustion
+  if (clients.length >= MAX_SSE_CONNECTIONS) {
+    return res.status(503).json({
+      error: 'Too many connections',
+      message: 'Maximum SSE connections reached. Please try again later.'
+    });
+  }
+
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
@@ -171,6 +184,7 @@ watcher.on('add', (filepath) => {
 // Graceful shutdown
 process.on('SIGTERM', () => {
   console.log('SIGTERM signal received: closing HTTP server');
+  clearInterval(rateLimitCleanupInterval);
   watcher.close();
   server.close(() => {
     console.log('HTTP server closed');

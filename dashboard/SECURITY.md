@@ -13,7 +13,7 @@ The following security headers are applied to all HTTP responses:
 | Content-Security-Policy | `default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'` | Prevents XSS attacks by controlling which resources can be loaded |
 | X-Content-Type-Options | `nosniff` | Prevents MIME type sniffing attacks |
 | X-Frame-Options | `DENY` | Prevents clickjacking attacks by disallowing iframe embedding |
-| X-XSS-Protection | `1; mode=block` | Enables browser's built-in XSS filter (legacy but still useful) |
+| X-XSS-Protection | `1; mode=block` | Legacy XSS filter for older browsers (deprecated; modern browsers use CSP) |
 | Referrer-Policy | `strict-origin-when-cross-origin` | Controls how much referrer information is shared |
 
 ### Rate Limiting
@@ -32,6 +32,8 @@ API endpoints (`/api/*`) are protected by in-memory rate limiting:
 
 - Run `npm run audit` to check for known vulnerabilities in dependencies
 - Run `npm run audit:fix` to automatically fix vulnerabilities when possible
+- For CI/CD, consider: `npm audit --audit-level=high` to fail only on high/critical issues
+- Note: Not all vulnerabilities may have fixes available; assess risk vs. compatibility
 - Regular dependency updates are recommended
 
 ## Security Checklist
@@ -82,6 +84,21 @@ When preparing for production/shared deployment, consider:
 - [ ] Add request logging and monitoring
 - [ ] Implement IP allowlisting if needed
 - [ ] Set up a Web Application Firewall (WAF)
+
+### Rate Limiting in Production
+
+- [ ] Configure `trust proxy` setting when behind reverse proxy/load balancer
+- [ ] Validate X-Forwarded-For header appropriately
+- [ ] Consider rate limiting by API key or user ID instead of just IP
+- [ ] Use a distributed rate limiter (Redis-based) for multi-instance deployments
+
+### Content Security Policy Hardening
+
+When refactoring frontend code:
+- [ ] Remove inline scripts and use external files or nonces
+- [ ] Remove inline styles or use CSS files
+- [ ] Update CSP to remove 'unsafe-inline' directives
+- [ ] Consider using CSP nonces for dynamic content
 
 ### Input Validation
 

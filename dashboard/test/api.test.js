@@ -138,6 +138,17 @@ describe('API Functional Tests', () => {
       }
     });
 
+    test('returns 400 when request body is an array', async () => {
+      const { status, data } = await apiRequest('/api/episodes', {
+        method: 'POST',
+        body: JSON.stringify([{ series: 'test' }])
+      });
+
+      assert.strictEqual(status, 400);
+      assert.strictEqual(data.success, false);
+      assert.ok(data.error.includes('Invalid request body'), 'error should mention invalid request body');
+    });
+
     test('returns 400 when series is missing', async () => {
       const { status, data } = await apiRequest('/api/episodes', {
         method: 'POST',
@@ -442,6 +453,19 @@ describe('API Functional Tests', () => {
       assert.ok(!data.metadata.title.includes('\x00'), 'should not contain null character');
       assert.ok(!data.metadata.title.includes('\x1F'), 'should not contain control character');
     });
+
+    test('returns 400 when request body is an array', async () => {
+      const response = await fetch(`${baseUrl}/api/episodes/test-series/test-episode`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify([{ content_status: 'ready' }])
+      });
+      const data = await response.json();
+
+      assert.strictEqual(response.status, 400);
+      assert.strictEqual(data.success, false);
+      assert.ok(data.error.includes('Invalid request body'), 'error should mention invalid request body');
+    });
   });
 
   describe('Security Tests', () => {
@@ -737,6 +761,17 @@ describe('API Functional Tests', () => {
         assert.strictEqual(status, 400);
         assert.strictEqual(data.success, false);
       });
+
+      test('returns 400 when request body is an array', async () => {
+        const { status, data } = await apiRequest('/api/assets/folder', {
+          method: 'POST',
+          body: JSON.stringify([{ name: 'test-folder' }])
+        });
+
+        assert.strictEqual(status, 400);
+        assert.strictEqual(data.success, false);
+        assert.ok(data.error.includes('Invalid request body'), 'error should mention invalid request body');
+      });
     });
 
     describe('DELETE /api/assets/*', () => {
@@ -878,6 +913,17 @@ describe('API Functional Tests', () => {
         }
         // Clean up original if rename failed
         await fs.rm(path.join(testAssetsDir, 'sanitize-test-folder'), { recursive: true, force: true }).catch(() => {});
+      });
+
+      test('returns 400 when request body is an array', async () => {
+        const { status, data } = await apiRequest('/api/assets/some-folder', {
+          method: 'PATCH',
+          body: JSON.stringify([{ newPath: 'test' }])
+        });
+
+        assert.strictEqual(status, 400);
+        assert.strictEqual(data.success, false);
+        assert.ok(data.error.includes('Invalid request body'), 'error should mention invalid request body');
       });
     });
   });

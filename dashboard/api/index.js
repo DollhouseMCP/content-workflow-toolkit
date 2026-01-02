@@ -599,6 +599,14 @@ router.patch('/episodes/:series/:episode', async (req, res) => {
     const { series, episode } = req.params;
     const updates = req.body;
 
+    // Validate request body exists
+    if (!updates || typeof updates !== 'object' || Array.isArray(updates)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid request body. Ensure Content-Type is application/json and body contains valid JSON object.'
+      });
+    }
+
     // Validate path parameters to prevent directory traversal
     if (series.includes('..') || series.includes('/') || series.includes('\\') ||
         episode.includes('..') || episode.includes('/') || episode.includes('\\')) {
@@ -779,6 +787,14 @@ router.post('/episodes', async (req, res) => {
   let episodeCreated = false; // Only true after we successfully create the folder
 
   try {
+    // Validate request body exists (express.json() middleware may not have parsed it)
+    if (!req.body || typeof req.body !== 'object' || Array.isArray(req.body)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid request body. Ensure Content-Type is application/json and body contains valid JSON object.'
+      });
+    }
+
     const { series, topic, title, description, targetDate, distributionProfile } = req.body;
 
     // Validate required fields
@@ -1174,6 +1190,14 @@ router.post('/assets/upload', upload.array('files', 20), async (req, res) => {
 // POST /api/assets/folder - Create a new folder
 router.post('/assets/folder', async (req, res) => {
   try {
+    // Validate request body exists
+    if (!req.body || typeof req.body !== 'object' || Array.isArray(req.body)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid request body. Ensure Content-Type is application/json and body contains valid JSON object.'
+      });
+    }
+
     const { path: parentPath, name } = req.body;
 
     if (!name || typeof name !== 'string') {
@@ -1314,6 +1338,14 @@ router.delete('/assets/*', async (req, res) => {
 // PATCH /api/assets/* - Rename or move a file/folder
 router.patch('/assets/*', async (req, res) => {
   try {
+    // Validate request body exists
+    if (!req.body || typeof req.body !== 'object' || Array.isArray(req.body)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid request body. Ensure Content-Type is application/json and body contains valid JSON object.'
+      });
+    }
+
     // Get the current path from URL params
     const currentPath = req.params[0];
     const { newPath } = req.body;

@@ -57,7 +57,15 @@ const ALLOWED_EXTENSIONS = new Set([
 // Maximum file size: 100MB
 const MAX_FILE_SIZE = 100 * 1024 * 1024;
 
-// Sanitize filename - remove special characters that could cause issues
+/**
+ * Sanitizes a filename by removing special characters that could cause filesystem issues.
+ * Replaces dangerous characters with underscores and limits the filename length.
+ * @param {string} filename - The original filename to sanitize
+ * @returns {string} The sanitized filename with extension preserved
+ * @example
+ * sanitizeFilename('my file@#$.txt') // Returns 'my_file___.txt'
+ * sanitizeFilename('a'.repeat(250) + '.pdf') // Returns 'aaa...(200 chars max).pdf'
+ */
 function sanitizeFilename(filename) {
   // Get the extension
   const ext = path.extname(filename).toLowerCase();
@@ -73,8 +81,15 @@ function sanitizeFilename(filename) {
   return sanitized + ext;
 }
 
-// Validate path is within assets directory (prevent path traversal)
-// Uses path.relative() for robust cross-platform handling
+/**
+ * Validates that a target path is within the assets directory to prevent path traversal attacks.
+ * Uses path.relative() for robust cross-platform handling.
+ * @param {string} targetPath - The path to validate (relative to assets directory)
+ * @returns {boolean} True if the path is safely within the assets directory, false otherwise
+ * @example
+ * isPathWithinAssets('images/logo.png') // Returns true
+ * isPathWithinAssets('../config.yml') // Returns false (path traversal attempt)
+ */
 function isPathWithinAssets(targetPath) {
   const resolvedPath = path.resolve(ASSETS_DIR, targetPath);
   const normalizedAssetsDir = path.resolve(ASSETS_DIR);
@@ -88,7 +103,14 @@ function isPathWithinAssets(targetPath) {
          (!relativePath.startsWith('..') && !path.isAbsolute(relativePath));
 }
 
-// Validate file extension
+/**
+ * Checks if a file has an allowed extension based on the ALLOWED_EXTENSIONS whitelist.
+ * @param {string} filename - The filename to check (with extension)
+ * @returns {boolean} True if the file extension is in the allowed list, false otherwise
+ * @example
+ * isAllowedExtension('photo.jpg') // Returns true
+ * isAllowedExtension('script.exe') // Returns false
+ */
 function isAllowedExtension(filename) {
   const ext = path.extname(filename).toLowerCase();
   return ALLOWED_EXTENSIONS.has(ext);
@@ -135,6 +157,17 @@ const upload = multer({
 
 // Cached metadata template (loaded once at startup, deep cloned on use)
 let cachedMetadataTemplate = null;
+
+/**
+ * Returns a deep clone of the cached metadata template.
+ * Loads the template from disk on first call and caches it for subsequent requests.
+ * If the template file doesn't exist, returns a default template with basic structure.
+ * @async
+ * @returns {Promise<Object>} A deep clone of the metadata template object
+ * @example
+ * const template = await getMetadataTemplate();
+ * template.title = 'My Episode'; // Safe to modify - it's a clone
+ */
 async function getMetadataTemplate() {
   if (cachedMetadataTemplate === null) {
     try {
@@ -169,6 +202,17 @@ async function getMetadataTemplate() {
 
 // Cached distribution profiles (loaded once at startup)
 let cachedDistributionProfiles = null;
+
+/**
+ * Returns cached distribution profiles from distribution-profiles.yml.
+ * Loads the file on first call and caches it for subsequent requests.
+ * If the file doesn't exist, returns an empty profiles object.
+ * @async
+ * @returns {Promise<Object>} The distribution profiles configuration object
+ * @example
+ * const profiles = await getDistributionProfiles();
+ * console.log(profiles.profiles); // { 'youtube': {...}, 'podcast': {...} }
+ */
 async function getDistributionProfiles() {
   if (cachedDistributionProfiles === null) {
     try {
@@ -186,7 +230,14 @@ async function getDistributionProfiles() {
   return cachedDistributionProfiles;
 }
 
-// Helper: Recursively remove directory (for cleanup on failure)
+/**
+ * Recursively removes a directory and all its contents.
+ * Used for cleanup on failure during episode creation.
+ * Errors are logged but not thrown to allow cleanup to continue.
+ * @async
+ * @param {string} dirPath - The absolute path to the directory to remove
+ * @returns {Promise<void>}
+ */
 async function removeDirectory(dirPath) {
   try {
     await fs.rm(dirPath, { recursive: true, force: true });
@@ -195,7 +246,16 @@ async function removeDirectory(dirPath) {
   }
 }
 
-// Helper: Validate and sanitize slug (no path traversal)
+/**
+ * Validates that a slug matches the required format and contains no path traversal attempts.
+ * Valid slugs contain only lowercase letters, numbers, hyphens, and underscores.
+ * @param {string} slug - The slug to validate
+ * @returns {boolean} True if the slug is valid, false otherwise
+ * @example
+ * isValidSlug('my-episode-01') // Returns true
+ * isValidSlug('My Episode!') // Returns false (uppercase and special chars)
+ * isValidSlug('../etc/passwd') // Returns false (path traversal)
+ */
 function isValidSlug(slug) {
   if (!slug || typeof slug !== 'string') return false;
   if (slug.length < 1 || slug.length > MAX_SLUG_LENGTH) return false;
@@ -204,7 +264,16 @@ function isValidSlug(slug) {
   return VALID_SLUG_REGEX.test(slug);
 }
 
-// Helper: Validate series name
+/**
+ * Validates that a series name matches the required format and contains no path traversal attempts.
+ * Valid series names contain letters, numbers, spaces, hyphens, and underscores.
+ * @param {string} name - The series name to validate
+ * @returns {boolean} True if the series name is valid, false otherwise
+ * @example
+ * isValidSeriesName('My Series 2024') // Returns true
+ * isValidSeriesName('Series!@#') // Returns false (special chars)
+ * isValidSeriesName('../secret') // Returns false (path traversal)
+ */
 function isValidSeriesName(name) {
   if (!name || typeof name !== 'string') return false;
   if (name.length < 1 || name.length > MAX_SERIES_NAME_LENGTH) return false;
@@ -213,7 +282,17 @@ function isValidSeriesName(name) {
   return VALID_SERIES_REGEX.test(name);
 }
 
-// Helper: Slugify a string
+/**
+ * Converts text to a URL-friendly slug.
+ * Transforms to lowercase, replaces spaces with hyphens, removes non-word characters,
+ * and trims leading/trailing hyphens.
+ * @param {string} text - The text to convert to a slug
+ * @returns {string} The URL-friendly slug
+ * @example
+ * slugify('Hello World!') // Returns 'hello-world'
+ * slugify('  Multiple   Spaces  ') // Returns 'multiple-spaces'
+ * slugify('Special @#$ Characters') // Returns 'special-characters'
+ */
 function slugify(text) {
   return text
     .toString()
@@ -226,7 +305,13 @@ function slugify(text) {
     .replace(/-+$/, '');            // Trim - from end
 }
 
-// Helper: Get current date in YYYY-MM-DD format
+/**
+ * Returns the current date in YYYY-MM-DD format.
+ * Uses the local timezone for date calculation.
+ * @returns {string} The current date formatted as YYYY-MM-DD
+ * @example
+ * getCurrentDate() // Returns '2026-01-02' (example output)
+ */
 function getCurrentDate() {
   const now = new Date();
   const year = now.getFullYear();
@@ -235,7 +320,16 @@ function getCurrentDate() {
   return `${year}-${month}-${day}`;
 }
 
-// Helper: Read and parse YAML file
+/**
+ * Reads and parses a YAML file from the filesystem.
+ * @async
+ * @param {string} filepath - The absolute path to the YAML file
+ * @returns {Promise<Object>} The parsed YAML content as a JavaScript object
+ * @throws {Error} If the file cannot be read or parsed
+ * @example
+ * const metadata = await readYamlFile('/path/to/metadata.yml');
+ * console.log(metadata.title); // 'Episode Title'
+ */
 async function readYamlFile(filepath) {
   try {
     const content = await fs.readFile(filepath, 'utf8');
@@ -246,7 +340,17 @@ async function readYamlFile(filepath) {
   }
 }
 
-// Helper: Write YAML file
+/**
+ * Writes data to a YAML file with consistent formatting.
+ * Uses 2-space indentation and preserves string formatting.
+ * @async
+ * @param {string} filepath - The absolute path to write the YAML file
+ * @param {Object} data - The JavaScript object to serialize to YAML
+ * @returns {Promise<void>}
+ * @throws {Error} If the file cannot be written
+ * @example
+ * await writeYamlFile('/path/to/metadata.yml', { title: 'New Title', status: 'draft' });
+ */
 async function writeYamlFile(filepath, data) {
   try {
     const content = yaml.dump(data, {
@@ -263,7 +367,17 @@ async function writeYamlFile(filepath, data) {
   }
 }
 
-// Helper: Deep merge objects (target is modified)
+/**
+ * Deep merges source object into target object, modifying target in place.
+ * Nested objects are merged recursively; arrays and primitives are overwritten.
+ * @param {Object} target - The target object to merge into (will be modified)
+ * @param {Object} source - The source object to merge from
+ * @returns {Object} The modified target object
+ * @example
+ * const target = { a: 1, nested: { x: 1 } };
+ * deepMerge(target, { b: 2, nested: { y: 2 } });
+ * // target is now { a: 1, b: 2, nested: { x: 1, y: 2 } }
+ */
 function deepMerge(target, source) {
   for (const key in source) {
     if (source[key] && typeof source[key] === 'object' && !Array.isArray(source[key])) {
@@ -278,7 +392,24 @@ function deepMerge(target, source) {
   return target;
 }
 
-// Helper: Validate and sanitize episode metadata updates
+/**
+ * Validates and sanitizes episode metadata updates.
+ * Checks field types, lengths, and allowed values. Sanitizes strings by
+ * removing control characters and trimming whitespace.
+ * @param {Object} updates - The update fields to validate
+ * @param {string} [updates.title] - Episode title (max 200 chars)
+ * @param {string} [updates.description] - Episode description (max 10000 chars)
+ * @param {string} [updates.content_status] - Status: 'draft'|'ready'|'staged'|'released'
+ * @param {string[]} [updates.tags] - Array of tag strings
+ * @param {Object} [updates.workflow] - Workflow progress flags
+ * @param {Object} [updates.release] - Release scheduling info
+ * @returns {{errors: string[], sanitized: Object}} Validation errors and sanitized values
+ * @example
+ * const { errors, sanitized } = validateEpisodeUpdate({ title: 'New Title', content_status: 'ready' });
+ * if (errors.length === 0) {
+ *   // Apply sanitized updates
+ * }
+ */
 function validateEpisodeUpdate(updates) {
   const errors = [];
   const sanitized = {};
@@ -430,7 +561,17 @@ function validateEpisodeUpdate(updates) {
   return { errors, sanitized };
 }
 
-// Helper: Recursively scan directory for episodes
+/**
+ * Recursively scans a directory for episode folders containing metadata.yml.
+ * Returns an array of episode objects with their path, series, and metadata.
+ * @async
+ * @param {string} dir - The directory path to scan
+ * @returns {Promise<Array<{path: string, series: string, episode: string, metadata: Object}>>}
+ *   Array of episode objects
+ * @example
+ * const episodes = await scanForEpisodes('/path/to/series');
+ * // Returns [{ path: 'series/show/ep1', series: 'show', episode: 'ep1', metadata: {...} }, ...]
+ */
 async function scanForEpisodes(dir) {
   const episodes = [];
 
@@ -470,7 +611,19 @@ async function scanForEpisodes(dir) {
   return episodes;
 }
 
-// Helper: Get directory tree structure with detailed file info
+/**
+ * Builds a hierarchical directory tree with detailed file information.
+ * Includes file sizes, modification times, and identifies image files.
+ * Results are sorted with directories first, then files alphabetically.
+ * @async
+ * @param {string} dir - The directory path to scan
+ * @param {string} [relativeTo=dir] - Base path for relative path calculation
+ * @returns {Promise<{name: string, path: string, type: string, children: Array, fileCount: number}>}
+ *   Tree structure with nested children
+ * @example
+ * const tree = await getDirectoryTree('/path/to/assets');
+ * // Returns { name: 'assets', path: '', type: 'directory', children: [...], fileCount: 42 }
+ */
 async function getDirectoryTree(dir, relativeTo = dir) {
   const tree = {
     name: path.basename(dir),

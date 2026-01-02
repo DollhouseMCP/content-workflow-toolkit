@@ -600,10 +600,10 @@ router.patch('/episodes/:series/:episode', async (req, res) => {
     const updates = req.body;
 
     // Validate request body exists
-    if (!updates || typeof updates !== 'object') {
+    if (!updates || typeof updates !== 'object' || Array.isArray(updates)) {
       return res.status(400).json({
         success: false,
-        error: 'Invalid request body. Ensure Content-Type is application/json and body contains valid JSON.'
+        error: 'Invalid request body. Ensure Content-Type is application/json and body contains valid JSON object.'
       });
     }
 
@@ -788,10 +788,10 @@ router.post('/episodes', async (req, res) => {
 
   try {
     // Validate request body exists (express.json() middleware may not have parsed it)
-    if (!req.body || typeof req.body !== 'object') {
+    if (!req.body || typeof req.body !== 'object' || Array.isArray(req.body)) {
       return res.status(400).json({
         success: false,
-        error: 'Invalid request body. Ensure Content-Type is application/json and body contains valid JSON.'
+        error: 'Invalid request body. Ensure Content-Type is application/json and body contains valid JSON object.'
       });
     }
 
@@ -1191,10 +1191,10 @@ router.post('/assets/upload', upload.array('files', 20), async (req, res) => {
 router.post('/assets/folder', async (req, res) => {
   try {
     // Validate request body exists
-    if (!req.body || typeof req.body !== 'object') {
+    if (!req.body || typeof req.body !== 'object' || Array.isArray(req.body)) {
       return res.status(400).json({
         success: false,
-        error: 'Invalid request body. Ensure Content-Type is application/json and body contains valid JSON.'
+        error: 'Invalid request body. Ensure Content-Type is application/json and body contains valid JSON object.'
       });
     }
 
@@ -1339,10 +1339,10 @@ router.delete('/assets/*', async (req, res) => {
 router.patch('/assets/*', async (req, res) => {
   try {
     // Validate request body exists
-    if (!req.body || typeof req.body !== 'object') {
+    if (!req.body || typeof req.body !== 'object' || Array.isArray(req.body)) {
       return res.status(400).json({
         success: false,
-        error: 'Invalid request body. Ensure Content-Type is application/json and body contains valid JSON.'
+        error: 'Invalid request body. Ensure Content-Type is application/json and body contains valid JSON object.'
       });
     }
 

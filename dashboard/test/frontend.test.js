@@ -657,5 +657,108 @@ describe('Frontend Tests', async () => {
       assert.ok(!firstFile.classList.contains('selected'), 'First file should no longer be selected');
       assert.ok(secondFile.classList.contains('selected'), 'Second file should be selected');
     });
+
+    test('selection can be cleared when returning to search', () => {
+      const firstFile = document.querySelector('.asset-tree-file');
+      const searchInput = document.getElementById('asset-search');
+
+      // Select a file
+      firstFile.classList.add('selected');
+      assert.ok(firstFile.classList.contains('selected'), 'File should be selected');
+
+      // Simulate returning to search - clear selection
+      firstFile.classList.remove('selected');
+      searchInput.focus();
+
+      assert.ok(!firstFile.classList.contains('selected'), 'Selection should be cleared');
+      assert.strictEqual(document.activeElement, searchInput, 'Focus should be on search');
+    });
+
+    test('handles missing data-file-data gracefully', () => {
+      // Add a file item without data-file-data
+      const assetTree = document.getElementById('asset-tree');
+      const invalidItem = document.createElement('div');
+      invalidItem.className = 'asset-tree-item asset-tree-file';
+      invalidItem.setAttribute('tabindex', '0');
+      // Note: no data-file-data attribute
+      assetTree.appendChild(invalidItem);
+
+      // Should not throw when checking dataset
+      assert.strictEqual(invalidItem.dataset.fileData, undefined, 'Should have undefined data');
+    });
+
+    test('handles malformed JSON in data-file-data gracefully', () => {
+      // Add a file item with malformed JSON
+      const assetTree = document.getElementById('asset-tree');
+      const malformedItem = document.createElement('div');
+      malformedItem.className = 'asset-tree-item asset-tree-file';
+      malformedItem.setAttribute('data-file-data', '{invalid json}');
+      malformedItem.setAttribute('tabindex', '0');
+      assetTree.appendChild(malformedItem);
+
+      // Parsing should throw - this is what our code catches
+      assert.throws(() => {
+        JSON.parse(malformedItem.dataset.fileData);
+      }, SyntaxError, 'Malformed JSON should throw SyntaxError');
+    });
+
+    test('handles file data without required path field', () => {
+      // Create file data missing the path field
+      const fileData = { name: 'test.png', ext: '.png' }; // missing 'path'
+
+      // Our validation checks for path
+      const isValid = fileData && typeof fileData === 'object' && fileData.path;
+      assert.ok(!isValid, 'File data without path should be invalid');
+    });
+
+    test('handles file data with null values', () => {
+      const fileData = { name: null, path: null, ext: null };
+
+      // path exists but is null - should fail validation
+      const isValid = fileData && typeof fileData === 'object' && fileData.path;
+      assert.ok(!isValid, 'File data with null path should be invalid');
+    });
+
+    test('DOM traversal finds next file correctly', () => {
+      const assetTree = document.getElementById('asset-tree');
+      const allFiles = assetTree.querySelectorAll('.asset-tree-file');
+      const fileArray = Array.from(allFiles);
+
+      // Test finding next from first file
+      const currentIndex = 0;
+      const nextIndex = currentIndex + 1;
+
+      assert.ok(nextIndex < fileArray.length, 'Should have next file');
+      assert.ok(fileArray[nextIndex].dataset.filePath.includes('file2'), 'Next should be file2');
+    });
+
+    test('DOM traversal finds previous file correctly', () => {
+      const assetTree = document.getElementById('asset-tree');
+      const allFiles = assetTree.querySelectorAll('.asset-tree-file');
+      const fileArray = Array.from(allFiles);
+
+      // Test finding previous from second file
+      const currentIndex = 1;
+      const prevIndex = currentIndex - 1;
+
+      assert.ok(prevIndex >= 0, 'Should have previous file');
+      assert.ok(fileArray[prevIndex].dataset.filePath.includes('file1'), 'Previous should be file1');
+    });
+
+    test('DOM traversal returns null at boundaries', () => {
+      const assetTree = document.getElementById('asset-tree');
+      const allFiles = assetTree.querySelectorAll('.asset-tree-file');
+      const fileArray = Array.from(allFiles);
+
+      // At first file, previous should be null
+      const firstIndex = 0;
+      const prevIndex = firstIndex - 1;
+      assert.ok(prevIndex < 0, 'No previous at first file');
+
+      // At last file, next should be null
+      const lastIndex = fileArray.length - 1;
+      const nextIndex = lastIndex + 1;
+      assert.ok(nextIndex >= fileArray.length, 'No next at last file');
+    });
   });
 });

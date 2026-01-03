@@ -1145,7 +1145,7 @@ footer {
 }
 
 .asset-preview-header {
-    padding: 0.75rem 1rem;
+    padding: 0.5rem 1rem;
     border-bottom: 1px solid var(--border);
     font-weight: 600;
     font-size: 0.8rem;
@@ -1154,6 +1154,39 @@ footer {
     color: var(--text-secondary);
     background-color: var(--background);
     flex-shrink: 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+/* Preview Theme Selectors */
+.preview-theme-selectors {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.preview-theme-select {
+    background: var(--surface);
+    color: var(--text-primary);
+    border: 1px solid var(--border);
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.7rem;
+    text-transform: none;
+    font-weight: normal;
+    letter-spacing: normal;
+}
+
+.preview-theme-select:hover {
+    background: var(--surface-hover);
+    border-color: var(--primary-color);
+}
+
+.preview-theme-select:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
 }
 
 #asset-preview-content {
@@ -2611,9 +2644,8 @@ input[type="date"].edit-field::-webkit-calendar-picker-indicator {
 }
 
 .toolbar-search {
-    flex: 1;
-    max-width: 300px;
-    min-width: 150px;
+    flex: 2;
+    min-width: 200px;
 }
 
 .toolbar-search .search-input {

@@ -4,6 +4,7 @@ import { DASHBOARD_CONFIG } from '../config.js';
 import { escapeHtml, formatFileSize, formatFileDate, getFileIcon } from '../utils.js';
 import { showModal, closeModal, showNotification } from '../modal.js';
 import { matchesAssetFilter, hasMatchingFilesInDir } from '../utils/assetFilters.js';
+import { createThemeSelectorsHTML, attachThemeSelectorHandlers, initializeThemes } from '../previewThemes.js';
 
 /**
  * Render the asset browser view
@@ -100,6 +101,7 @@ export async function renderAssets(dashboard) {
         <div class="asset-preview-panel">
           <div class="asset-preview-header">
             <span>Preview</span>
+            ${createThemeSelectorsHTML()}
           </div>
           <div id="asset-preview-content">
             ${renderAssetPreview(dashboard.assetBrowserState.selectedFile, dashboard)}
@@ -118,6 +120,10 @@ export async function renderAssets(dashboard) {
   // Attach event listeners
   attachAssetBrowserListeners(dashboard);
   attachAssetManagementListeners(dashboard);
+
+  // Initialize theme system and attach theme selector handlers
+  initializeThemes();
+  attachThemeSelectorHandlers();
 }
 
 /**

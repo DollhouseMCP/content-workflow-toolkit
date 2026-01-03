@@ -1229,6 +1229,21 @@ class Dashboard {
         });
     }
 
+    /**
+     * Converts a string into a URL-friendly slug.
+     *
+     * NOTE: This function is intentionally duplicated in the server-side code.
+     * Keep in sync with: dashboard/api/index.js (slugify function)
+     *
+     * The duplication exists because:
+     * - Server needs slugify for validation and folder creation
+     * - Client needs slugify for live preview/auto-formatting in forms
+     * - A shared module would require a build step (adds complexity)
+     * - An API endpoint would add latency for real-time input formatting
+     *
+     * @param {string} text - The text to slugify
+     * @returns {string} URL-friendly slug (lowercase, hyphens, no special chars)
+     */
     slugify(text) {
         return text
             .toString()

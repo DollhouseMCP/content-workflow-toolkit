@@ -3,7 +3,6 @@
 
 import fs from 'fs/promises';
 import path from 'path';
-import yaml from 'js-yaml';
 import { SERIES_DIR, readYamlFile } from '../utils.js';
 import type { EpisodeMetadata } from '../types.js';
 

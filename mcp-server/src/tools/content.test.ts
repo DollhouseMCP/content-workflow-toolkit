@@ -43,10 +43,21 @@ beforeEach(async () => {
 
 // Cleanup after each test
 afterEach(async () => {
-  if (testDir) {
-    await fs.rm(testDir, { recursive: true, force: true });
-  }
+  // Reset modules first to release file handles
   vi.resetModules();
+
+  // Then cleanup test directory with error handling
+  if (testDir) {
+    try {
+      await fs.rm(testDir, { recursive: true, force: true });
+    } catch (error) {
+      // Log but don't fail - temp dirs will be cleaned by OS eventually
+      console.error(`Warning: Failed to cleanup test directory ${testDir}:`, error);
+    }
+  }
+
+  // Reset testDir to prevent double-cleanup
+  testDir = '';
 });
 
 describe('createSeries', () => {

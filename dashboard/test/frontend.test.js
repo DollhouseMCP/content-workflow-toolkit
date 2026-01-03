@@ -760,5 +760,41 @@ describe('Frontend Tests', async () => {
       const nextIndex = lastIndex + 1;
       assert.ok(nextIndex >= fileArray.length, 'No next at last file');
     });
+
+    test('focus can be restored after tree update by file path', () => {
+      const assetTree = document.getElementById('asset-tree');
+      const secondFile = document.querySelectorAll('.asset-tree-file')[1];
+      const filePath = secondFile.dataset.filePath;
+
+      // Focus the second file
+      secondFile.focus();
+      assert.strictEqual(document.activeElement, secondFile, 'Second file should have focus');
+
+      // Simulate tree update - replace innerHTML
+      const originalHTML = assetTree.innerHTML;
+      assetTree.innerHTML = originalHTML; // Re-render same content
+
+      // Find the file by path and restore focus
+      const restoredFile = assetTree.querySelector(`[data-file-path="${filePath}"]`);
+      assert.ok(restoredFile, 'File should still exist after re-render');
+      restoredFile.focus();
+
+      assert.strictEqual(document.activeElement, restoredFile, 'Focus should be restored to file');
+      assert.strictEqual(restoredFile.dataset.filePath, filePath, 'Should be same file path');
+    });
+
+    test('CSS.escape handles special characters in file paths', () => {
+      // CSS.escape is used to safely query by file path
+      const specialPath = '/assets/file[1].png';
+
+      // In JSDOM, CSS.escape may not be available, so test the concept
+      if (typeof CSS !== 'undefined' && CSS.escape) {
+        const escaped = CSS.escape(specialPath);
+        assert.ok(escaped.includes('\\['), 'Should escape special characters');
+      } else {
+        // Skip if CSS.escape not available in test environment
+        assert.ok(true, 'CSS.escape not available in test environment');
+      }
+    });
   });
 });

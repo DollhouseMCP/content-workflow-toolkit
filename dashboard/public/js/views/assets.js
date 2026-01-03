@@ -345,11 +345,18 @@ function renderAssetPreview(file, dashboard) {
  * Update only the asset tree portion of the view.
  * This preserves the search input element and its focus state,
  * preventing the focus loss bug when typing in the search bar.
+ * Also preserves focus on file items during keyboard navigation.
  * @param {object} dashboard - Dashboard instance
  */
 function updateAssetTreeOnly(dashboard) {
   const assetTree = document.getElementById('asset-tree');
   if (!assetTree || !dashboard._assetTreeData) return;
+
+  // Check if a file item currently has focus (user is navigating with keyboard)
+  const activeElement = document.activeElement;
+  const focusedFilePath = activeElement?.classList.contains('asset-tree-file')
+    ? activeElement.dataset.filePath
+    : null;
 
   assetTree.innerHTML = renderAssetTree(
     dashboard._assetTreeData,
@@ -357,6 +364,14 @@ function updateAssetTreeOnly(dashboard) {
     '',
     dashboard.assetBrowserState
   );
+
+  // Restore focus to the same file if it still exists after tree update
+  if (focusedFilePath) {
+    const fileToFocus = assetTree.querySelector(`[data-file-path="${CSS.escape(focusedFilePath)}"]`);
+    if (fileToFocus) {
+      fileToFocus.focus();
+    }
+  }
 }
 
 /**

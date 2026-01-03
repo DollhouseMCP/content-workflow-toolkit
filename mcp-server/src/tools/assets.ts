@@ -2,7 +2,7 @@
 
 import fs from 'fs/promises';
 import path from 'path';
-import { ASSETS_DIR, BASE_DIR, slugify } from '../utils.js';
+import { ASSETS_DIR } from '../utils.js';
 
 /**
  * Asset file/folder info
@@ -74,7 +74,7 @@ async function buildAssetTree(dirPath: string, relativePath: string = ''): Promi
 }
 
 /**
- * Filter assets by type
+ * Filter assets by type, returning only files matching the type and directories containing them
  */
 function filterAssetsByType(assets: AssetInfo[], type: string): AssetInfo[] {
   const typeExtensions: Record<string, string[]> = {
@@ -87,17 +87,19 @@ function filterAssetsByType(assets: AssetInfo[], type: string): AssetInfo[] {
   const extensions = typeExtensions[type];
   if (!extensions) return assets;
 
-  return assets.filter(asset => {
-    if (asset.type === 'directory') {
-      // Recursively filter children
-      const filteredChildren = filterAssetsByType(asset.children || [], type);
-      if (filteredChildren.length > 0) {
-        return { ...asset, children: filteredChildren };
+  return assets
+    .map(asset => {
+      if (asset.type === 'directory') {
+        // Recursively filter children
+        const filteredChildren = filterAssetsByType(asset.children || [], type);
+        if (filteredChildren.length > 0) {
+          return { ...asset, children: filteredChildren };
+        }
+        return null;
       }
-      return false;
-    }
-    return extensions.includes(asset.ext || '');
-  });
+      return extensions.includes(asset.ext || '') ? asset : null;
+    })
+    .filter((asset): asset is AssetInfo => asset !== null);
 }
 
 /**

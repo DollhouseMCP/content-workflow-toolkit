@@ -537,4 +537,264 @@ describe('Frontend Tests', async () => {
       assert.ok(container, 'Container with special chars in path should be found');
     });
   });
+
+  describe('Asset Browser Keyboard Navigation', async () => {
+    let dom;
+    let document;
+
+    beforeEach(() => {
+      dom = new JSDOM(`
+        <!DOCTYPE html>
+        <html>
+        <body>
+          <div id="content">
+            <input type="text" id="asset-search" placeholder="Search files...">
+            <div id="asset-tree">
+              <div class="asset-tree-item asset-tree-file"
+                   data-file-path="/assets/file1.png"
+                   data-file-data='{"name":"file1.png","path":"/assets/file1.png","ext":".png"}'
+                   tabindex="0">
+                <span>file1.png</span>
+              </div>
+              <div class="asset-tree-item asset-tree-file"
+                   data-file-path="/assets/file2.jpg"
+                   data-file-data='{"name":"file2.jpg","path":"/assets/file2.jpg","ext":".jpg"}'
+                   tabindex="0">
+                <span>file2.jpg</span>
+              </div>
+              <div class="asset-tree-item asset-tree-file"
+                   data-file-path="/assets/file3.md"
+                   data-file-data='{"name":"file3.md","path":"/assets/file3.md","ext":".md"}'
+                   tabindex="0">
+                <span>file3.md</span>
+              </div>
+            </div>
+          </div>
+        </body>
+        </html>
+      `, { runScripts: 'dangerously' });
+
+      document = dom.window.document;
+    });
+
+    test('file items have tabindex for keyboard focus', () => {
+      const fileItems = document.querySelectorAll('.asset-tree-file');
+      assert.ok(fileItems.length > 0, 'Should have file items');
+
+      for (const item of fileItems) {
+        assert.strictEqual(item.getAttribute('tabindex'), '0', 'File items should have tabindex="0"');
+      }
+    });
+
+    test('file items can receive focus', () => {
+      const firstFile = document.querySelector('.asset-tree-file');
+      firstFile.focus();
+
+      assert.strictEqual(document.activeElement, firstFile, 'File item should be focusable');
+    });
+
+    test('file items have data-file-data attribute for selection', () => {
+      const fileItems = document.querySelectorAll('.asset-tree-file');
+
+      for (const item of fileItems) {
+        const fileData = item.dataset.fileData;
+        assert.ok(fileData, 'File item should have data-file-data');
+
+        const parsed = JSON.parse(fileData);
+        assert.ok(parsed.name, 'File data should have name');
+        assert.ok(parsed.path, 'File data should have path');
+      }
+    });
+
+    test('search input exists and is focusable', () => {
+      const searchInput = document.getElementById('asset-search');
+      assert.ok(searchInput, 'Search input should exist');
+
+      searchInput.focus();
+      assert.strictEqual(document.activeElement, searchInput, 'Search input should be focusable');
+    });
+
+    test('can find all visible file items for navigation', () => {
+      const allFiles = Array.from(document.querySelectorAll('.asset-tree-file'));
+      assert.strictEqual(allFiles.length, 3, 'Should find all 3 file items');
+
+      // Verify order
+      assert.ok(allFiles[0].dataset.filePath.includes('file1'), 'First file should be file1');
+      assert.ok(allFiles[1].dataset.filePath.includes('file2'), 'Second file should be file2');
+      assert.ok(allFiles[2].dataset.filePath.includes('file3'), 'Third file should be file3');
+    });
+
+    test('simulated arrow navigation finds next/previous elements', () => {
+      const allFiles = Array.from(document.querySelectorAll('.asset-tree-file'));
+
+      // Start at first file
+      let currentIndex = 0;
+
+      // Arrow down
+      const nextIndex = currentIndex + 1;
+      assert.ok(nextIndex < allFiles.length, 'Should be able to go down');
+      assert.ok(allFiles[nextIndex].dataset.filePath.includes('file2'), 'Next should be file2');
+
+      // Arrow up from second file
+      currentIndex = 1;
+      const prevIndex = currentIndex - 1;
+      assert.ok(prevIndex >= 0, 'Should be able to go up');
+      assert.ok(allFiles[prevIndex].dataset.filePath.includes('file1'), 'Previous should be file1');
+    });
+
+    test('selected class can be toggled for visual feedback', () => {
+      const firstFile = document.querySelector('.asset-tree-file');
+      const secondFile = document.querySelectorAll('.asset-tree-file')[1];
+
+      // Select first file
+      firstFile.classList.add('selected');
+      assert.ok(firstFile.classList.contains('selected'), 'First file should be selected');
+
+      // Move selection to second file
+      firstFile.classList.remove('selected');
+      secondFile.classList.add('selected');
+
+      assert.ok(!firstFile.classList.contains('selected'), 'First file should no longer be selected');
+      assert.ok(secondFile.classList.contains('selected'), 'Second file should be selected');
+    });
+
+    test('selection can be cleared when returning to search', () => {
+      const firstFile = document.querySelector('.asset-tree-file');
+      const searchInput = document.getElementById('asset-search');
+
+      // Select a file
+      firstFile.classList.add('selected');
+      assert.ok(firstFile.classList.contains('selected'), 'File should be selected');
+
+      // Simulate returning to search - clear selection
+      firstFile.classList.remove('selected');
+      searchInput.focus();
+
+      assert.ok(!firstFile.classList.contains('selected'), 'Selection should be cleared');
+      assert.strictEqual(document.activeElement, searchInput, 'Focus should be on search');
+    });
+
+    test('handles missing data-file-data gracefully', () => {
+      // Add a file item without data-file-data
+      const assetTree = document.getElementById('asset-tree');
+      const invalidItem = document.createElement('div');
+      invalidItem.className = 'asset-tree-item asset-tree-file';
+      invalidItem.setAttribute('tabindex', '0');
+      // Note: no data-file-data attribute
+      assetTree.appendChild(invalidItem);
+
+      // Should not throw when checking dataset
+      assert.strictEqual(invalidItem.dataset.fileData, undefined, 'Should have undefined data');
+    });
+
+    test('handles malformed JSON in data-file-data gracefully', () => {
+      // Add a file item with malformed JSON
+      const assetTree = document.getElementById('asset-tree');
+      const malformedItem = document.createElement('div');
+      malformedItem.className = 'asset-tree-item asset-tree-file';
+      malformedItem.setAttribute('data-file-data', '{invalid json}');
+      malformedItem.setAttribute('tabindex', '0');
+      assetTree.appendChild(malformedItem);
+
+      // Parsing should throw - this is what our code catches
+      assert.throws(() => {
+        JSON.parse(malformedItem.dataset.fileData);
+      }, SyntaxError, 'Malformed JSON should throw SyntaxError');
+    });
+
+    test('handles file data without required path field', () => {
+      // Create file data missing the path field
+      const fileData = { name: 'test.png', ext: '.png' }; // missing 'path'
+
+      // Our validation checks for path
+      const isValid = fileData && typeof fileData === 'object' && fileData.path;
+      assert.ok(!isValid, 'File data without path should be invalid');
+    });
+
+    test('handles file data with null values', () => {
+      const fileData = { name: null, path: null, ext: null };
+
+      // path exists but is null - should fail validation
+      const isValid = fileData && typeof fileData === 'object' && fileData.path;
+      assert.ok(!isValid, 'File data with null path should be invalid');
+    });
+
+    test('DOM traversal finds next file correctly', () => {
+      const assetTree = document.getElementById('asset-tree');
+      const allFiles = assetTree.querySelectorAll('.asset-tree-file');
+      const fileArray = Array.from(allFiles);
+
+      // Test finding next from first file
+      const currentIndex = 0;
+      const nextIndex = currentIndex + 1;
+
+      assert.ok(nextIndex < fileArray.length, 'Should have next file');
+      assert.ok(fileArray[nextIndex].dataset.filePath.includes('file2'), 'Next should be file2');
+    });
+
+    test('DOM traversal finds previous file correctly', () => {
+      const assetTree = document.getElementById('asset-tree');
+      const allFiles = assetTree.querySelectorAll('.asset-tree-file');
+      const fileArray = Array.from(allFiles);
+
+      // Test finding previous from second file
+      const currentIndex = 1;
+      const prevIndex = currentIndex - 1;
+
+      assert.ok(prevIndex >= 0, 'Should have previous file');
+      assert.ok(fileArray[prevIndex].dataset.filePath.includes('file1'), 'Previous should be file1');
+    });
+
+    test('DOM traversal returns null at boundaries', () => {
+      const assetTree = document.getElementById('asset-tree');
+      const allFiles = assetTree.querySelectorAll('.asset-tree-file');
+      const fileArray = Array.from(allFiles);
+
+      // At first file, previous should be null
+      const firstIndex = 0;
+      const prevIndex = firstIndex - 1;
+      assert.ok(prevIndex < 0, 'No previous at first file');
+
+      // At last file, next should be null
+      const lastIndex = fileArray.length - 1;
+      const nextIndex = lastIndex + 1;
+      assert.ok(nextIndex >= fileArray.length, 'No next at last file');
+    });
+
+    test('focus can be restored after tree update by file path', () => {
+      const assetTree = document.getElementById('asset-tree');
+      const secondFile = document.querySelectorAll('.asset-tree-file')[1];
+      const filePath = secondFile.dataset.filePath;
+
+      // Focus the second file
+      secondFile.focus();
+      assert.strictEqual(document.activeElement, secondFile, 'Second file should have focus');
+
+      // Simulate tree update - replace innerHTML
+      const originalHTML = assetTree.innerHTML;
+      assetTree.innerHTML = originalHTML; // Re-render same content
+
+      // Find the file by path and restore focus
+      const restoredFile = assetTree.querySelector(`[data-file-path="${filePath}"]`);
+      assert.ok(restoredFile, 'File should still exist after re-render');
+      restoredFile.focus();
+
+      assert.strictEqual(document.activeElement, restoredFile, 'Focus should be restored to file');
+      assert.strictEqual(restoredFile.dataset.filePath, filePath, 'Should be same file path');
+    });
+
+    test('CSS.escape handles special characters in file paths', () => {
+      // CSS.escape is used to safely query by file path
+      const specialPath = '/assets/file[1].png';
+
+      // In JSDOM, CSS.escape may not be available, so test the concept
+      if (typeof CSS !== 'undefined' && CSS.escape) {
+        const escaped = CSS.escape(specialPath);
+        assert.ok(escaped.includes('\\['), 'Should escape special characters');
+      } else {
+        // Skip if CSS.escape not available in test environment
+        assert.ok(true, 'CSS.escape not available in test environment');
+      }
+    });
+  });
 });

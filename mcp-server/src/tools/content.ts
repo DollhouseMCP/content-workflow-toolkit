@@ -17,7 +17,8 @@ import {
   writeYamlFile,
   readYamlFile,
   MAX_TITLE_LENGTH,
-  MAX_DESCRIPTION_LENGTH
+  MAX_DESCRIPTION_LENGTH,
+  MAX_SERIES_NAME_LENGTH
 } from '../utils.js';
 import type { Episode, EpisodeMetadata, WorkflowStage, VALID_WORKFLOW_STAGES, VALID_CONTENT_STATUSES } from '../types.js';
 
@@ -351,6 +352,10 @@ export async function createSeries(
       return { success: false, error: 'Series name is required' };
     }
 
+    if (seriesName.length > MAX_SERIES_NAME_LENGTH) {
+      return { success: false, error: `Series name exceeds maximum length of ${MAX_SERIES_NAME_LENGTH} characters` };
+    }
+
     if (!isValidSeriesName(seriesName)) {
       return {
         success: false,
@@ -386,11 +391,19 @@ export async function createSeries(
     await fs.mkdir(seriesPath, { recursive: false });
     seriesCreated = true;
 
+    // Validate and sanitize description
+    const sanitizedDescription = description?.replace(/<[^>]*>/g, '').trim() || '';
+    if (sanitizedDescription.length > MAX_DESCRIPTION_LENGTH) {
+      // Cleanup since we already created the folder
+      await fs.rm(seriesPath, { recursive: true, force: true });
+      return { success: false, error: `Description exceeds maximum length of ${MAX_DESCRIPTION_LENGTH} characters` };
+    }
+
     // Create series metadata
     const metadata: SeriesMetadata = {
       name: seriesName,
       slug: seriesSlug,
-      description: description?.replace(/<[^>]*>/g, '').trim() || '',
+      description: sanitizedDescription,
       created: getCurrentDate(),
       template: template || 'default',
       settings: {
@@ -401,7 +414,9 @@ export async function createSeries(
 
     // Write series.yml
     const metadataContent = '# Series Metadata\n' + yaml.dump(metadata, {
+      indent: 2,
       lineWidth: -1,
+      noRefs: true,
       quotingType: '"',
       forceQuotes: false
     });

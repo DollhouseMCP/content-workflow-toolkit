@@ -34,6 +34,9 @@ export function matchesAssetFilter(file, state) {
     case 'document':
       if (!['.md', '.txt', '.pdf', '.doc', '.docx'].includes(ext)) return false;
       break;
+    default:
+      // Unknown filter types pass through (matches all)
+      break;
     }
   }
 

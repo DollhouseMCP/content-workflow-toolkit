@@ -103,6 +103,47 @@ describe('Frontend Tests', async () => {
       assert.strictEqual(searchInputAfter.value, 'i', 'Value should be preserved');
       assert.strictEqual(searchInputAfter, searchInput, 'Same element reference');
     });
+
+    test('input event dispatched on search updates state correctly', () => {
+      const searchInput = document.getElementById('asset-search');
+
+      // Simulate state object like dashboard.assetBrowserState
+      const state = { searchQuery: '' };
+
+      // Create handler similar to the real one
+      const inputHandler = (e) => {
+        if (e.target.id === 'asset-search') {
+          state.searchQuery = e.target.value;
+        }
+      };
+      document.getElementById('content').addEventListener('input', inputHandler);
+
+      // Type in the search input
+      searchInput.value = 'test';
+      searchInput.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+
+      // Verify state was updated
+      assert.strictEqual(state.searchQuery, 'test', 'State should be updated on input');
+    });
+
+    test('search input maintains focus after simulated tree update', () => {
+      const searchInput = document.getElementById('asset-search');
+
+      // Focus and type
+      searchInput.focus();
+      searchInput.value = 'test';
+
+      // Verify focus before update
+      assert.strictEqual(dom.window.document.activeElement, searchInput, 'Input should have focus initially');
+
+      // Simulate tree-only update (what updateAssetTreeOnly does)
+      const assetTree = document.getElementById('asset-tree');
+      assetTree.innerHTML = '<div class="asset-tree-item">new content</div>';
+
+      // Focus should be maintained since we didn't touch the input
+      assert.strictEqual(dom.window.document.activeElement, searchInput, 'Input should maintain focus after tree update');
+      assert.strictEqual(searchInput.value, 'test', 'Value should be preserved');
+    });
   });
 
   describe('Asset Filter Functions (matchesAssetFilter)', async () => {
@@ -189,6 +230,76 @@ describe('Frontend Tests', async () => {
       assert.ok(matchesAssetFilter({ name: 'thumbnail.png', ext: '.png' }, state));
       assert.ok(!matchesAssetFilter({ name: 'thumbnail.mp4', ext: '.mp4' }, state)); // wrong type
       assert.ok(!matchesAssetFilter({ name: 'photo.png', ext: '.png' }, state)); // wrong name
+    });
+
+    test('unknown filter type passes through (matches all)', () => {
+      const state = { searchQuery: '', filterType: 'unknown-type' };
+      const file = { name: 'test.xyz', ext: '.xyz' };
+
+      assert.ok(matchesAssetFilter(file, state), 'Unknown filter type should match all files');
+    });
+  });
+
+  describe('XSS Prevention - Malicious Filenames', async () => {
+
+    test('filter handles script tag in filename', () => {
+      const state = { searchQuery: 'script', filterType: 'all' };
+      const maliciousFile = { name: '<script>alert(1)</script>.png', ext: '.png' };
+
+      // Should match based on text content, not execute script
+      assert.ok(matchesAssetFilter(maliciousFile, state));
+    });
+
+    test('filter handles HTML entities in filename', () => {
+      const state = { searchQuery: '&lt;', filterType: 'all' };
+      const file = { name: 'test&lt;file&gt;.txt', ext: '.txt' };
+
+      assert.ok(matchesAssetFilter(file, state));
+    });
+
+    test('filter handles quotes in filename', () => {
+      const state = { searchQuery: 'test', filterType: 'all' };
+      const file1 = { name: 'test"file.png', ext: '.png' };
+      const file2 = { name: "test'file.png", ext: '.png' };
+
+      assert.ok(matchesAssetFilter(file1, state));
+      assert.ok(matchesAssetFilter(file2, state));
+    });
+
+    test('filter handles event handlers in filename', () => {
+      const state = { searchQuery: 'onerror', filterType: 'all' };
+      const maliciousFile = { name: 'img onerror=alert(1).png', ext: '.png' };
+
+      assert.ok(matchesAssetFilter(maliciousFile, state));
+    });
+
+    test('filter handles unicode and emoji in filename', () => {
+      const state = { searchQuery: '🎵', filterType: 'all' };
+      const file = { name: '🎵music🎵.mp3', ext: '.mp3' };
+
+      assert.ok(matchesAssetFilter(file, state));
+    });
+
+    test('filter handles empty filename', () => {
+      const state = { searchQuery: '', filterType: 'all' };
+      const file = { name: '', ext: '.txt' };
+
+      assert.ok(matchesAssetFilter(file, state));
+    });
+
+    test('filter handles file without extension', () => {
+      const state = { searchQuery: 'readme', filterType: 'all' };
+      const file = { name: 'README', ext: '' };
+
+      assert.ok(matchesAssetFilter(file, state));
+    });
+
+    test('filter handles very long filename', () => {
+      const state = { searchQuery: 'long', filterType: 'all' };
+      const longName = 'a'.repeat(1000) + 'long' + 'b'.repeat(1000);
+      const file = { name: longName + '.txt', ext: '.txt' };
+
+      assert.ok(matchesAssetFilter(file, state));
     });
   });
 

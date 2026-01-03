@@ -2,8 +2,8 @@
 
 export interface EpisodeMetadata {
   content_status: 'draft' | 'ready' | 'staged' | 'released';
-  title: string;
-  description: string;
+  title?: string;
+  description?: string;
   tags?: string[];
   category?: number;
   privacy?: string;

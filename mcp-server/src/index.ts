@@ -366,10 +366,10 @@ const tools: Tool[] = [
     }
   },
 
-  // Content Generation Tools (stubs)
+  // Content Generation Tools
   {
     name: 'generate_description',
-    description: 'Generates an AI description from the episode script.md file (NOT YET IMPLEMENTED)',
+    description: 'Generates a YouTube/video description from the episode script.md file. Extracts key points and timestamps.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -387,7 +387,7 @@ const tools: Tool[] = [
   },
   {
     name: 'generate_social_posts',
-    description: 'Generates AI social media posts for an episode (NOT YET IMPLEMENTED)',
+    description: 'Generates social media posts for an episode. Creates platform-appropriate content for Twitter, LinkedIn, Bluesky, and Threads.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -398,6 +398,11 @@ const tools: Tool[] = [
         episode: {
           type: 'string',
           description: 'The episode folder name'
+        },
+        platforms: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Optional array of platforms to generate for (twitter, linkedin, bluesky, threads). Defaults to all.'
         }
       },
       required: ['series', 'episode']
@@ -590,8 +595,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case 'generate_social_posts': {
-        const { series, episode } = args as { series: string; episode: string };
-        const result = await generateSocialPosts(series, episode);
+        const { series, episode, platforms } = args as {
+          series: string;
+          episode: string;
+          platforms?: string[];
+        };
+        const result = await generateSocialPosts(series, episode, platforms);
         return {
           content: [{ type: 'text', text: JSON.stringify(result, null, 2) }]
         };

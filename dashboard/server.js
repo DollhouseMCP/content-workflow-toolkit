@@ -19,7 +19,7 @@ const PORT = process.env.PORT || 3000;
 app.use((req, res, next) => {
   // Prevent XSS attacks by controlling which resources can be loaded
   res.setHeader('Content-Security-Policy',
-    "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'"
+    "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'"
   );
 
   // Prevent MIME type sniffing

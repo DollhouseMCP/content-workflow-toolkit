@@ -8,6 +8,23 @@ import { SERIES_DIR, readYamlFile } from '../utils.js';
 import type { EpisodeMetadata } from '../types.js';
 
 /**
+ * Valid social media platforms for post generation
+ */
+const VALID_PLATFORMS = ['twitter', 'linkedin', 'bluesky', 'threads'] as const;
+type SocialPlatform = typeof VALID_PLATFORMS[number];
+
+/**
+ * Debug logging utility - writes to stderr to avoid interfering with MCP stdio
+ */
+function debugLog(operation: string, message: string, data?: Record<string, unknown>): void {
+  if (process.env.DEBUG === 'true' || process.env.MCP_DEBUG === 'true') {
+    const timestamp = new Date().toISOString();
+    const logData = data ? ` ${JSON.stringify(data)}` : '';
+    console.error(`[${timestamp}] [generation:${operation}] ${message}${logData}`);
+  }
+}
+
+/**
  * Extract sections from a markdown script
  */
 function extractScriptSections(content: string): {
@@ -100,9 +117,12 @@ export async function generateDescription(
   episode: string
 ): Promise<{ success: boolean; description?: string; source?: string; error?: string }> {
   try {
+    debugLog('generateDescription', 'Starting', { series, episode });
+
     // Validate path parameters
     if (series.includes('..') || series.includes('/') || series.includes('\\') ||
         episode.includes('..') || episode.includes('/') || episode.includes('\\')) {
+      debugLog('generateDescription', 'Invalid path parameters', { series, episode });
       return { success: false, error: 'Invalid series or episode name' };
     }
 
@@ -114,7 +134,8 @@ export async function generateDescription(
     let scriptContent: string;
     try {
       scriptContent = await fs.readFile(scriptPath, 'utf8');
-    } catch {
+    } catch (err) {
+      debugLog('generateDescription', 'Script file not found', { path: scriptPath });
       return { success: false, error: 'Script file not found' };
     }
 
@@ -168,6 +189,8 @@ export async function generateDescription(
     descriptionParts.push('👍 Like if you found this helpful');
     descriptionParts.push('💬 Leave a comment with your thoughts');
 
+    debugLog('generateDescription', 'Generated successfully', { series, episode });
+
     return {
       success: true,
       description: descriptionParts.join('\n'),
@@ -175,9 +198,11 @@ export async function generateDescription(
     };
 
   } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    debugLog('generateDescription', 'Error', { error: errorMessage });
     return {
       success: false,
-      error: `Failed to generate description: ${error instanceof Error ? error.message : String(error)}`
+      error: `Failed to generate description: ${errorMessage}`
     };
   }
 }
@@ -257,8 +282,30 @@ export async function generateSocialPosts(
     }
     const hashtagStr = hashtags.join(' ');
 
-    // Default to all platforms
-    const targetPlatforms = platforms || ['twitter', 'linkedin', 'bluesky', 'threads'];
+    // Validate and filter platforms
+    let targetPlatforms: SocialPlatform[];
+    if (platforms && platforms.length > 0) {
+      targetPlatforms = platforms.filter(
+        (p): p is SocialPlatform => VALID_PLATFORMS.includes(p as SocialPlatform)
+      );
+      if (targetPlatforms.length === 0) {
+        debugLog('generateSocialPosts', 'No valid platforms specified', { provided: platforms });
+        return {
+          success: false,
+          error: `Invalid platforms specified. Valid options: ${VALID_PLATFORMS.join(', ')}`
+        };
+      }
+      if (targetPlatforms.length < platforms.length) {
+        debugLog('generateSocialPosts', 'Some invalid platforms filtered out', {
+          provided: platforms,
+          valid: targetPlatforms
+        });
+      }
+    } else {
+      targetPlatforms = [...VALID_PLATFORMS];
+    }
+
+    debugLog('generateSocialPosts', 'Generating posts', { platforms: targetPlatforms, title: episodeTitle });
 
     const posts: {
       twitter?: string;
@@ -355,9 +402,17 @@ export async function generateSocialPosts(
       result.warning = 'Generated with minimal content. Consider adding a title to metadata or script for better posts.';
     }
 
+    debugLog('generateSocialPosts', 'Generated successfully', {
+      series,
+      episode,
+      platforms: Object.keys(posts)
+    });
+
     return result;
 
   } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    debugLog('generateSocialPosts', 'Error', { error: errorMessage });
     return {
       success: false,
       error: `Failed to generate social posts: ${error instanceof Error ? error.message : String(error)}`

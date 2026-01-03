@@ -382,4 +382,33 @@ describe('generateSocialPosts', () => {
     expect(result.success).toBe(true);
     expect(result.warning).toBeUndefined();
   });
+
+  it('should reject invalid platforms', async () => {
+    await createTestEpisode('test-series', 'platforms-test', {
+      script: '# Video\n\n## Content\nSome stuff',
+      metadata: { title: 'Video', content_status: 'draft' }
+    });
+
+    const { generateSocialPosts } = await importGenerationModule();
+    const result = await generateSocialPosts('test-series', 'platforms-test', ['invalid', 'fake']);
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('Invalid platforms');
+    expect(result.error).toContain('twitter');
+  });
+
+  it('should filter out invalid platforms but succeed with valid ones', async () => {
+    await createTestEpisode('test-series', 'mixed-platforms', {
+      script: '# Video\n\n## Content\nSome stuff',
+      metadata: { title: 'Video', content_status: 'draft' }
+    });
+
+    const { generateSocialPosts } = await importGenerationModule();
+    const result = await generateSocialPosts('test-series', 'mixed-platforms', ['twitter', 'invalid', 'bluesky']);
+
+    expect(result.success).toBe(true);
+    expect(result.posts?.twitter).toBeDefined();
+    expect(result.posts?.bluesky).toBeDefined();
+    expect(result.posts?.linkedin).toBeUndefined();
+  });
 });

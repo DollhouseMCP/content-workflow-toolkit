@@ -3,6 +3,7 @@
 import { DASHBOARD_CONFIG } from '../config.js';
 import { escapeHtml, formatFileSize, formatFileDate, getFileIcon } from '../utils.js';
 import { showModal, closeModal } from '../modal.js';
+import { matchesAssetFilter, hasMatchingFilesInDir } from '../utils/assetFilters.js';
 
 /**
  * Render the asset browser view
@@ -184,54 +185,6 @@ function renderAssetTree(node, level, parentPath, state) {
   `;
 }
 
-/**
- * Check if file matches current filter
- */
-function matchesAssetFilter(file, state) {
-  // Search filter
-  if (state.searchQuery) {
-    const query = state.searchQuery.toLowerCase();
-    if (!file.name.toLowerCase().includes(query)) {
-      return false;
-    }
-  }
-
-  // Type filter
-  if (state.filterType !== 'all') {
-    const ext = file.ext;
-    switch (state.filterType) {
-    case 'image':
-      if (!['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg'].includes(ext)) return false;
-      break;
-    case 'video':
-      if (!['.mp4', '.mov', '.webm', '.avi'].includes(ext)) return false;
-      break;
-    case 'audio':
-      if (!['.mp3', '.wav', '.m4a', '.aac', '.ogg'].includes(ext)) return false;
-      break;
-    case 'document':
-      if (!['.md', '.txt', '.pdf', '.doc', '.docx'].includes(ext)) return false;
-      break;
-    }
-  }
-
-  return true;
-}
-
-/**
- * Check if directory has matching files
- */
-function hasMatchingFilesInDir(node, state) {
-  if (node.type === 'file') {
-    return matchesAssetFilter(node, state);
-  }
-
-  if (node.children && node.children.length > 0) {
-    return node.children.some(child => hasMatchingFilesInDir(child, state));
-  }
-
-  return false;
-}
 
 /**
  * Render asset preview
@@ -288,16 +241,27 @@ function renderAssetPreview(file, dashboard) {
       </div>
     `;
     // Fetch and render markdown after DOM update
+    // Cancel any pending preview request to prevent race conditions
+    if (dashboard._previewAbortController) {
+      dashboard._previewAbortController.abort();
+    }
+    const abortController = new AbortController();
+    dashboard._previewAbortController = abortController;
+
     setTimeout(async () => {
       const container = document.querySelector(`.markdown-preview[data-file="${filePath}"]`);
-      if (container) {
+      if (container && !abortController.signal.aborted) {
         try {
-          const response = await fetch(filePath);
+          const response = await fetch(filePath, { signal: abortController.signal });
           const text = await response.text();
-          const renderedHTML = await dashboard.renderMarkdown(text);
-          container.innerHTML = `<div class="markdown-content">${renderedHTML}</div>`;
+          if (!abortController.signal.aborted) {
+            const renderedHTML = await dashboard.renderMarkdown(text);
+            container.innerHTML = `<div class="markdown-content">${renderedHTML}</div>`;
+          }
         } catch (e) {
-          container.innerHTML = `<div class="markdown-error">Error loading markdown: ${e.message}</div>`;
+          if (e.name !== 'AbortError' && !abortController.signal.aborted) {
+            container.innerHTML = `<div class="markdown-error">Error loading markdown: ${escapeHtml(e.message)}</div>`;
+          }
         }
       }
     }, DASHBOARD_CONFIG.MARKDOWN_RENDER_DELAY);
@@ -310,15 +274,26 @@ function renderAssetPreview(file, dashboard) {
       </div>
     `;
     // Fetch and display text file
+    // Cancel any pending preview request to prevent race conditions
+    if (dashboard._previewAbortController) {
+      dashboard._previewAbortController.abort();
+    }
+    const abortController = new AbortController();
+    dashboard._previewAbortController = abortController;
+
     setTimeout(async () => {
       const container = document.querySelector(`.text-preview[data-file="${filePath}"]`);
-      if (container) {
+      if (container && !abortController.signal.aborted) {
         try {
-          const response = await fetch(filePath);
+          const response = await fetch(filePath, { signal: abortController.signal });
           const text = await response.text();
-          container.innerHTML = `<pre class="text-content">${escapeHtml(text)}</pre>`;
+          if (!abortController.signal.aborted) {
+            container.innerHTML = `<pre class="text-content">${escapeHtml(text)}</pre>`;
+          }
         } catch (e) {
-          container.innerHTML = `<div class="markdown-error">Error loading file: ${e.message}</div>`;
+          if (e.name !== 'AbortError' && !abortController.signal.aborted) {
+            container.innerHTML = `<div class="markdown-error">Error loading file: ${escapeHtml(e.message)}</div>`;
+          }
         }
       }
     }, DASHBOARD_CONFIG.MARKDOWN_RENDER_DELAY);
@@ -368,13 +343,31 @@ function renderAssetPreview(file, dashboard) {
 }
 
 /**
+ * Update only the asset tree portion of the view.
+ * This preserves the search input element and its focus state,
+ * preventing the focus loss bug when typing in the search bar.
+ * @param {object} dashboard - Dashboard instance
+ */
+function updateAssetTreeOnly(dashboard) {
+  const assetTree = document.getElementById('asset-tree');
+  if (!assetTree || !dashboard._assetTreeData) return;
+
+  assetTree.innerHTML = renderAssetTree(
+    dashboard._assetTreeData,
+    0,
+    '',
+    dashboard.assetBrowserState
+  );
+}
+
+/**
  * Attach asset browser event listeners
  */
 function attachAssetBrowserListeners(dashboard) {
   const content = document.getElementById('content');
   if (!content) return;
 
-  // Remove existing handlers
+  // Remove existing handlers and cleanup timers
   if (dashboard._assetClickHandler) {
     content.removeEventListener('click', dashboard._assetClickHandler);
   }
@@ -383,6 +376,16 @@ function attachAssetBrowserListeners(dashboard) {
   }
   if (dashboard._assetChangeHandler) {
     content.removeEventListener('change', dashboard._assetChangeHandler);
+  }
+  // Clear debounce timer to prevent stale updates
+  if (dashboard._searchDebounceTimer) {
+    clearTimeout(dashboard._searchDebounceTimer);
+    dashboard._searchDebounceTimer = null;
+  }
+  // Cancel pending preview requests
+  if (dashboard._previewAbortController) {
+    dashboard._previewAbortController.abort();
+    dashboard._previewAbortController = null;
   }
 
   // Create delegated click handler
@@ -446,11 +449,18 @@ function attachAssetBrowserListeners(dashboard) {
     }
   };
 
-  // Create delegated input handler (for search)
+  // Create delegated input handler (for search) with debouncing
   dashboard._assetInputHandler = (e) => {
     if (e.target.id === 'asset-search') {
       dashboard.assetBrowserState.searchQuery = e.target.value;
-      renderAssets(dashboard);
+      // Debounce the tree update to prevent lag on rapid typing
+      if (dashboard._searchDebounceTimer) {
+        clearTimeout(dashboard._searchDebounceTimer);
+      }
+      dashboard._searchDebounceTimer = setTimeout(() => {
+        // Update only the tree portion to preserve search input focus
+        updateAssetTreeOnly(dashboard);
+      }, DASHBOARD_CONFIG.SEARCH_DEBOUNCE_DELAY);
     }
   };
 

@@ -303,6 +303,39 @@ describe('Frontend Tests', async () => {
     });
   });
 
+  describe('Defensive Null Checks', async () => {
+
+    test('matchesAssetFilter returns false for null file', () => {
+      const state = { searchQuery: '', filterType: 'all' };
+      assert.ok(!matchesAssetFilter(null, state));
+    });
+
+    test('matchesAssetFilter returns false for undefined file', () => {
+      const state = { searchQuery: '', filterType: 'all' };
+      assert.ok(!matchesAssetFilter(undefined, state));
+    });
+
+    test('matchesAssetFilter returns false for null state', () => {
+      const file = { name: 'test.png', ext: '.png' };
+      assert.ok(!matchesAssetFilter(file, null));
+    });
+
+    test('matchesAssetFilter returns false for undefined state', () => {
+      const file = { name: 'test.png', ext: '.png' };
+      assert.ok(!matchesAssetFilter(file, undefined));
+    });
+
+    test('hasMatchingFilesInDir returns false for null node', () => {
+      const state = { searchQuery: '', filterType: 'all' };
+      assert.ok(!hasMatchingFilesInDir(null, state));
+    });
+
+    test('hasMatchingFilesInDir returns false for null state', () => {
+      const node = { type: 'file', name: 'test.png', ext: '.png' };
+      assert.ok(!hasMatchingFilesInDir(node, null));
+    });
+  });
+
   describe('Directory Filter Functions (hasMatchingFilesInDir)', async () => {
 
     test('file node returns matchesAssetFilter result', () => {

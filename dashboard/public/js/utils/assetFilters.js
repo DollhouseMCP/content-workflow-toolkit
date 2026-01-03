@@ -10,6 +10,9 @@
  * @returns {boolean} True if file matches filter criteria
  */
 export function matchesAssetFilter(file, state) {
+  // Defensive null checks
+  if (!file || !state) return false;
+
   // Search filter
   if (state.searchQuery) {
     const query = state.searchQuery.toLowerCase();
@@ -50,6 +53,9 @@ export function matchesAssetFilter(file, state) {
  * @returns {boolean} True if node or any descendant matches filter
  */
 export function hasMatchingFilesInDir(node, state) {
+  // Defensive null checks
+  if (!node || !state) return false;
+
   if (node.type === 'file') {
     return matchesAssetFilter(node, state);
   }

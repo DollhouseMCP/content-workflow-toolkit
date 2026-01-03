@@ -367,7 +367,7 @@ function attachAssetBrowserListeners(dashboard) {
   const content = document.getElementById('content');
   if (!content) return;
 
-  // Remove existing handlers
+  // Remove existing handlers and cleanup timers
   if (dashboard._assetClickHandler) {
     content.removeEventListener('click', dashboard._assetClickHandler);
   }
@@ -376,6 +376,16 @@ function attachAssetBrowserListeners(dashboard) {
   }
   if (dashboard._assetChangeHandler) {
     content.removeEventListener('change', dashboard._assetChangeHandler);
+  }
+  // Clear debounce timer to prevent stale updates
+  if (dashboard._searchDebounceTimer) {
+    clearTimeout(dashboard._searchDebounceTimer);
+    dashboard._searchDebounceTimer = null;
+  }
+  // Cancel pending preview requests
+  if (dashboard._previewAbortController) {
+    dashboard._previewAbortController.abort();
+    dashboard._previewAbortController = null;
   }
 
   // Create delegated click handler

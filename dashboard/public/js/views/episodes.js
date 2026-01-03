@@ -13,8 +13,7 @@ export async function renderEpisodes(dashboard) {
   if (!result.success || result.count === 0) {
     content.innerHTML = `
       <div class="view">
-        <div class="section-header">
-          <h2>Episodes</h2>
+        <div class="empty-state">
           <p>No episodes found. Add content to the series/ directory.</p>
         </div>
       </div>
@@ -48,10 +47,6 @@ export async function renderEpisodes(dashboard) {
 
   content.innerHTML = `
     <div class="view">
-      <div class="section-header">
-        <h2>Episodes</h2>
-        <p>Found ${result.count} episode(s)</p>
-      </div>
       <div class="card-grid">
         ${episodesHTML}
       </div>

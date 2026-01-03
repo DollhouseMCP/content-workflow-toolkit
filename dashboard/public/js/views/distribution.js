@@ -40,10 +40,6 @@ export async function renderDistribution(dashboard) {
 
   content.innerHTML = `
     <div class="view">
-      <div class="section-header">
-        <h2>Distribution Profiles</h2>
-        <p>Platform distribution configurations</p>
-      </div>
       ${Object.keys(profiles).length > 0 ? `
         <div class="card-grid">
           ${profilesHTML}

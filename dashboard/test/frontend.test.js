@@ -348,10 +348,19 @@ describe('Frontend Tests', async () => {
       assert.ok(!hasMatchingFilesInDir(nonMatchingFile, state));
     });
 
-    test('empty directory returns false', () => {
+    test('empty directory returns true when no filters active', () => {
       const state = { searchQuery: '', filterType: 'all' };
       const emptyDir = { type: 'directory', name: 'empty', children: [] };
 
+      // Empty folders should be visible when not filtering
+      assert.ok(hasMatchingFilesInDir(emptyDir, state));
+    });
+
+    test('empty directory returns false when search is active', () => {
+      const state = { searchQuery: 'something', filterType: 'all' };
+      const emptyDir = { type: 'directory', name: 'empty', children: [] };
+
+      // Empty folders should be hidden when searching
       assert.ok(!hasMatchingFilesInDir(emptyDir, state));
     });
 

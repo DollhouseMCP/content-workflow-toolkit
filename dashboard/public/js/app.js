@@ -11,6 +11,7 @@ import { renderCalendar } from './views/calendar.js';
 import { renderReleases } from './views/releaseQueue.js';
 import { renderAssets } from './views/assets.js';
 import { renderDistribution } from './views/distribution.js';
+import { attachMermaidFullscreenHandlers } from './mermaid-fullscreen.js';
 
 /**
  * Dashboard - Main application class
@@ -119,12 +120,16 @@ class Dashboard {
           if (container) {
             try {
               const { svg } = await mermaid.render(`${block.id}-svg`, block.diagram);
+              // Add mermaid class for fullscreen functionality
+              container.classList.add('mermaid');
               container.innerHTML = svg;
             } catch (e) {
               container.innerHTML = `<pre class="mermaid-error">Diagram error: ${e.message}</pre>`;
             }
           }
         }
+        // Attach fullscreen handlers to all rendered mermaid diagrams
+        attachMermaidFullscreenHandlers(document);
       }, DASHBOARD_CONFIG.MERMAID_RENDER_DELAY);
     }
 

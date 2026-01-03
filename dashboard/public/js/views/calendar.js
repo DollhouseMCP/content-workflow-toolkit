@@ -62,11 +62,6 @@ export async function renderCalendar(dashboard) {
 
   content.innerHTML = `
     <div class="view">
-      <div class="section-header">
-        <h2>Release Calendar</h2>
-        <p>Scheduled and released content timeline</p>
-      </div>
-
       ${releaseQueueWarning}
 
       <div class="calendar-controls">

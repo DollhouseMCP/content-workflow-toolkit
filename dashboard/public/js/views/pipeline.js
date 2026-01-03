@@ -99,16 +99,6 @@ export async function renderPipeline(dashboard) {
 
   content.innerHTML = `
     <div class="view">
-      <div class="section-header pipeline-header">
-        <div class="section-header-text">
-          <h2>Content Pipeline</h2>
-          <p>Track content progress through your workflow</p>
-        </div>
-        <button class="btn btn-primary" id="new-episode-btn">
-          <span class="btn-icon">+</span> New Episode
-        </button>
-      </div>
-
       <div class="pipeline-controls">
         <div class="filter-group">
           <label class="filter-label" for="series-filter">Series:</label>
@@ -123,6 +113,9 @@ export async function renderPipeline(dashboard) {
             <option value="created" ${dashboard.pipelineState.sortBy === 'created' ? 'selected' : ''}>Date Created</option>
             <option value="target_release" ${dashboard.pipelineState.sortBy === 'target_release' ? 'selected' : ''}>Target Release</option>
           </select>
+        </div>
+        <div class="filter-group" style="margin-left: auto;">
+          <button class="btn btn-primary" id="new-episode-btn">+ New Episode</button>
         </div>
       </div>
 

@@ -2,7 +2,7 @@
 
 import { DASHBOARD_CONFIG } from '../config.js';
 import { escapeHtml, formatFileSize, formatFileDate, getFileIcon } from '../utils.js';
-import { showModal, closeModal } from '../modal.js';
+import { showModal, closeModal, showNotification } from '../modal.js';
 import { matchesAssetFilter, hasMatchingFilesInDir } from '../utils/assetFilters.js';
 
 /**
@@ -37,11 +37,6 @@ export async function renderAssets(dashboard) {
 
   content.innerHTML = `
     <div class="view">
-      <div class="section-header">
-        <h2>Asset Browser</h2>
-        <p>Browse and preview media assets</p>
-      </div>
-
       <div class="asset-browser-toolbar">
         <div class="toolbar-left">
           <button class="toolbar-btn primary" id="upload-btn">
@@ -721,7 +716,7 @@ function showCreateFolderModal(dashboard) {
  */
 async function createFolder(parentPath, folderName, dashboard) {
   if (!folderName || !folderName.trim()) {
-    console.error('Please enter a folder name');
+    showNotification('Please enter a folder name', 'error', escapeHtml);
     return;
   }
 
@@ -741,12 +736,14 @@ async function createFolder(parentPath, folderName, dashboard) {
       closeModal('create-folder-modal');
       const fullPath = 'assets' + (parentPath ? '/' + parentPath : '');
       dashboard.assetBrowserState.expandedFolders.add(fullPath);
+      showNotification(`Folder "${folderName.trim()}" created`, 'success', escapeHtml);
       renderAssets(dashboard);
     } else {
-      console.error('Error:', result.error);
+      showNotification(result.error || 'Failed to create folder', 'error', escapeHtml);
     }
   } catch (error) {
     console.error('Create folder error:', error);
+    showNotification('Failed to create folder: ' + error.message, 'error', escapeHtml);
   }
 }
 

@@ -382,11 +382,9 @@ function attachAssetBrowserListeners(dashboard) {
     clearTimeout(dashboard._searchDebounceTimer);
     dashboard._searchDebounceTimer = null;
   }
-  // Cancel pending preview requests
-  if (dashboard._previewAbortController) {
-    dashboard._previewAbortController.abort();
-    dashboard._previewAbortController = null;
-  }
+  // Note: Don't abort preview requests here - renderAssetPreview handles
+  // aborting previous requests when a new file is selected. Aborting here
+  // would cancel the current preview before it even loads.
 
   // Create delegated click handler
   dashboard._assetClickHandler = async (e) => {

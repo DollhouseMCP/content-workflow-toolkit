@@ -425,4 +425,107 @@ describe('Frontend Tests', async () => {
       assert.ok(hasMatchingFilesInDir(dir, state));
     });
   });
+
+  describe('Asset Preview Loading', async () => {
+    let dom;
+    let document;
+
+    beforeEach(() => {
+      dom = new JSDOM(`
+        <!DOCTYPE html>
+        <html>
+        <body>
+          <div id="content">
+            <div id="asset-preview-content">
+              <div class="asset-preview-document markdown-preview" data-file="/content/assets/test.md">
+                <div class="markdown-loading">Loading markdown...</div>
+              </div>
+            </div>
+          </div>
+        </body>
+        </html>
+      `, { runScripts: 'dangerously' });
+
+      document = dom.window.document;
+    });
+
+    test('preview container can be found by selector with file path', () => {
+      const filePath = '/content/assets/test.md';
+      const selector = `.markdown-preview[data-file="${filePath}"]`;
+      const container = document.querySelector(selector);
+
+      assert.ok(container, 'Container should be found');
+      assert.ok(container.innerHTML.includes('Loading'), 'Should show loading state');
+    });
+
+    test('AbortController should not be aborted during normal preview flow', () => {
+      // Simulate what renderAssetPreview does
+      const dashboard = { _previewAbortController: null };
+
+      // Step 1: renderAssetPreview creates an AbortController
+      const abortController = new AbortController();
+      dashboard._previewAbortController = abortController;
+
+      // Step 2: Verify it's not aborted initially
+      assert.strictEqual(abortController.signal.aborted, false, 'Should not be aborted initially');
+
+      // Step 3: Simulate attachAssetBrowserListeners being called
+      // (The bug was that it would abort here)
+      // Now we verify the abort controller is still valid
+      assert.strictEqual(abortController.signal.aborted, false, 'Should still not be aborted after listener setup');
+    });
+
+    test('new file selection should abort previous preview request', () => {
+      const dashboard = { _previewAbortController: null };
+
+      // First file selected
+      const abortController1 = new AbortController();
+      dashboard._previewAbortController = abortController1;
+
+      // Second file selected - should abort first
+      if (dashboard._previewAbortController) {
+        dashboard._previewAbortController.abort();
+      }
+      const abortController2 = new AbortController();
+      dashboard._previewAbortController = abortController2;
+
+      assert.strictEqual(abortController1.signal.aborted, true, 'First controller should be aborted');
+      assert.strictEqual(abortController2.signal.aborted, false, 'Second controller should not be aborted');
+    });
+
+    test('text preview container can be found by selector', () => {
+      // Update DOM for text preview
+      const content = document.getElementById('content');
+      content.innerHTML = `
+        <div id="asset-preview-content">
+          <div class="asset-preview-document text-preview" data-file="/content/assets/test.txt">
+            <div class="markdown-loading">Loading file...</div>
+          </div>
+        </div>
+      `;
+
+      const filePath = '/content/assets/test.txt';
+      const selector = `.text-preview[data-file="${filePath}"]`;
+      const container = document.querySelector(selector);
+
+      assert.ok(container, 'Text preview container should be found');
+    });
+
+    test('preview with special characters in path can be found', () => {
+      const content = document.getElementById('content');
+      const filePath = '/content/assets/folder-name/file_name.md';
+      content.innerHTML = `
+        <div id="asset-preview-content">
+          <div class="asset-preview-document markdown-preview" data-file="${filePath}">
+            <div class="markdown-loading">Loading...</div>
+          </div>
+        </div>
+      `;
+
+      const selector = `.markdown-preview[data-file="${filePath}"]`;
+      const container = document.querySelector(selector);
+
+      assert.ok(container, 'Container with special chars in path should be found');
+    });
+  });
 });

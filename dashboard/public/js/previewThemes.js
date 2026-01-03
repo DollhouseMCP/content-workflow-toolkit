@@ -76,103 +76,121 @@ export function getSavedMermaidTheme() {
  * Apply base isolation styles to prevent dashboard styles from bleeding into preview
  * This creates a CSS reset boundary and provides default styling
  * Adapted from Merview's approach
+ *
+ * Uses CSS layer ordering: defaults come first, themes override
  */
 function applyPreviewIsolation() {
+  // Set up layer order - this ensures theme-styles layer wins over defaults
+  let layerOrder = document.getElementById('preview-layer-order');
+  if (!layerOrder) {
+    layerOrder = document.createElement('style');
+    layerOrder.id = 'preview-layer-order';
+    layerOrder.textContent = '@layer preview-defaults, preview-theme, syntax-theme;';
+    document.head.insertBefore(layerOrder, document.head.firstChild);
+  }
+
   let isolationStyle = document.getElementById('preview-isolation');
   if (isolationStyle) return; // Already applied
 
   isolationStyle = document.createElement('style');
   isolationStyle.id = 'preview-isolation';
-  // Default styles that apply when no theme is selected
-  // These provide a clean, readable base that can be overridden by themes
+  // Default styles in lowest priority layer - will be overridden by theme CSS
   isolationStyle.textContent = `
-    /* Default preview styles - overridden by theme CSS */
-    .markdown-preview {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif !important;
-      font-size: 16px !important;
-      line-height: 1.6 !important;
-      color: #333 !important;
-      background: #fff !important;
-      padding: 20px !important;
-    }
+    @layer preview-defaults {
+      /* Default preview styles - theme CSS will override via preview-theme layer */
+      .markdown-preview {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+        font-size: 16px;
+        line-height: 1.6;
+        color: #333;
+        background: #fff;
+        padding: 20px;
+        box-sizing: border-box;
+      }
 
-    .markdown-preview h1,
-    .markdown-preview h2,
-    .markdown-preview h3,
-    .markdown-preview h4,
-    .markdown-preview h5,
-    .markdown-preview h6 {
-      margin-top: 24px;
-      margin-bottom: 16px;
-      font-weight: 600;
-      line-height: 1.25;
-      color: #1a1a1a;
-    }
+      .markdown-preview * {
+        box-sizing: border-box;
+      }
 
-    .markdown-preview h1 { font-size: 2em; border-bottom: 1px solid #eee; padding-bottom: 0.3em; }
-    .markdown-preview h2 { font-size: 1.5em; border-bottom: 1px solid #eee; padding-bottom: 0.3em; }
-    .markdown-preview h3 { font-size: 1.25em; }
-    .markdown-preview h4 { font-size: 1em; }
+      .markdown-preview h1,
+      .markdown-preview h2,
+      .markdown-preview h3,
+      .markdown-preview h4,
+      .markdown-preview h5,
+      .markdown-preview h6 {
+        margin-top: 24px;
+        margin-bottom: 16px;
+        font-weight: 600;
+        line-height: 1.25;
+        color: #1a1a1a;
+      }
 
-    .markdown-preview p { margin-bottom: 16px; }
+      .markdown-preview h1 { font-size: 2em; border-bottom: 1px solid #eee; padding-bottom: 0.3em; }
+      .markdown-preview h2 { font-size: 1.5em; border-bottom: 1px solid #eee; padding-bottom: 0.3em; }
+      .markdown-preview h3 { font-size: 1.25em; }
+      .markdown-preview h4 { font-size: 1em; }
 
-    .markdown-preview a { color: #0366d6; text-decoration: none; }
-    .markdown-preview a:hover { text-decoration: underline; }
+      .markdown-preview p { margin-bottom: 16px; }
 
-    .markdown-preview ul,
-    .markdown-preview ol {
-      padding-left: 2em;
-      margin-bottom: 16px;
-    }
+      .markdown-preview a { color: #0366d6; text-decoration: none; }
+      .markdown-preview a:hover { text-decoration: underline; }
 
-    .markdown-preview li { margin-bottom: 0.25em; }
+      .markdown-preview ul,
+      .markdown-preview ol {
+        padding-left: 2em;
+        margin-bottom: 16px;
+      }
 
-    .markdown-preview blockquote {
-      padding: 0 1em;
-      color: #6a737d;
-      border-left: 0.25em solid #dfe2e5;
-      margin: 0 0 16px 0;
-    }
+      .markdown-preview li { margin-bottom: 0.25em; }
 
-    .markdown-preview table {
-      border-collapse: collapse;
-      width: 100%;
-      margin-bottom: 16px;
-    }
+      .markdown-preview blockquote {
+        padding: 0 1em;
+        color: #6a737d;
+        border-left: 0.25em solid #dfe2e5;
+        margin: 0 0 16px 0;
+      }
 
-    .markdown-preview th,
-    .markdown-preview td {
-      padding: 6px 13px;
-      border: 1px solid #dfe2e5;
-    }
+      .markdown-preview table {
+        border-collapse: collapse;
+        width: 100%;
+        margin-bottom: 16px;
+      }
 
-    .markdown-preview th {
-      font-weight: 600;
-      background-color: #f6f8fa;
-    }
+      .markdown-preview th,
+      .markdown-preview td {
+        padding: 6px 13px;
+        border: 1px solid #dfe2e5;
+      }
 
-    .markdown-preview hr {
-      height: 0.25em;
-      margin: 24px 0;
-      background-color: #e1e4e8;
-      border: 0;
-    }
+      .markdown-preview th {
+        font-weight: 600;
+        background-color: #f6f8fa;
+      }
 
-    .markdown-preview img {
-      max-width: 100%;
-      height: auto;
-    }
+      .markdown-preview hr {
+        height: 0.25em;
+        margin: 24px 0;
+        background-color: #e1e4e8;
+        border: 0;
+      }
 
-    /* Mermaid diagrams */
-    .markdown-preview .mermaid {
-      background: transparent;
-      text-align: center;
-      margin: 1em 0;
-    }
+      .markdown-preview img {
+        max-width: 100%;
+        height: auto;
+      }
 
-    .markdown-preview .mermaid svg {
-      max-width: 100%;
-      height: auto;
+      /* Mermaid diagrams - background set dynamically based on theme */
+      .markdown-preview .mermaid {
+        text-align: center;
+        margin: 1em 0;
+        padding: 1em;
+        border-radius: 4px;
+      }
+
+      .markdown-preview .mermaid svg {
+        max-width: 100%;
+        height: auto;
+      }
     }
   `;
   document.head.appendChild(isolationStyle);
@@ -248,10 +266,10 @@ export async function loadPreviewStyle(styleFile) {
 
     const cssText = await response.text();
 
-    // Create style element wrapped in CSS layer
+    // Create style element wrapped in CSS layer (preview-theme overrides preview-defaults)
     const styleElement = document.createElement('style');
     styleElement.id = 'preview-style-css';
-    styleElement.textContent = `@layer preview-styles { ${cssText} }`;
+    styleElement.textContent = `@layer preview-theme { ${cssText} }`;
     document.head.appendChild(styleElement);
 
     // Extract and apply background color to preview container
@@ -289,28 +307,47 @@ export function loadSyntaxTheme(themeFile) {
 }
 
 /**
+ * Get appropriate background color for mermaid theme
+ */
+function getMermaidBackground(theme) {
+  // Dark theme needs dark background, others need light
+  if (theme === 'dark') {
+    return '#1e1e1e';
+  }
+  return '#ffffff';
+}
+
+/**
  * Apply mermaid theme and re-render diagrams
  */
 export async function applyMermaidTheme(theme) {
   localStorage.setItem(STORAGE_KEYS.mermaidTheme, theme);
+
+  // Apply background color to all mermaid containers
+  const bgColor = getMermaidBackground(theme);
+  const diagrams = document.querySelectorAll('.markdown-preview .mermaid');
+  for (const diagram of diagrams) {
+    diagram.style.backgroundColor = bgColor;
+  }
 
   // Reinitialize mermaid with new theme
   if (window.mermaid) {
     window.mermaid.initialize({
       startOnLoad: false,
       theme: theme,
-      securityLevel: 'strict'
+      securityLevel: 'loose'
     });
 
-    // Re-render any existing diagrams
-    const diagrams = document.querySelectorAll('.mermaid[data-processed="true"]');
-    for (const diagram of diagrams) {
+    // Re-render any existing diagrams that have stored source
+    const diagramsWithSource = document.querySelectorAll('.mermaid[data-mermaid-source]');
+    let renderIndex = 0;
+    for (const diagram of diagramsWithSource) {
       const code = diagram.getAttribute('data-mermaid-source');
       if (code) {
-        diagram.removeAttribute('data-processed');
-        diagram.innerHTML = code;
         try {
-          const { svg } = await window.mermaid.render(`mermaid-${Date.now()}`, code);
+          // Generate unique ID for each render
+          const uniqueId = `mermaid-rerender-${Date.now()}-${renderIndex++}`;
+          const { svg } = await window.mermaid.render(uniqueId, code);
           diagram.innerHTML = svg;
           diagram.setAttribute('data-processed', 'true');
         } catch (e) {
@@ -339,13 +376,13 @@ export function initializeThemes() {
   const syntaxTheme = getSavedSyntaxTheme();
   loadSyntaxTheme(syntaxTheme);
 
-  // Initialize mermaid with saved theme
+  // Initialize mermaid with saved theme (uses 'loose' for inline styles in diagrams)
   const mermaidTheme = getSavedMermaidTheme();
   if (window.mermaid) {
     window.mermaid.initialize({
       startOnLoad: false,
       theme: mermaidTheme,
-      securityLevel: 'strict'
+      securityLevel: 'loose'
     });
   }
 }

@@ -95,13 +95,46 @@ describe('createSeries', () => {
   it('should warn about invalid template and use default', async () => {
     const { createSeries } = await importContentModule();
 
-    const result = await createSeries('Invalid Template Test', 'Test', 'nonexistent' as any);
+    // Use string type to test invalid template handling
+    const result = await createSeries('Invalid Template Test', 'Test', 'nonexistent');
 
     expect(result.success).toBe(true);
     expect(result.series?.metadata.template).toBe('default');
     expect(result.warning).toBeDefined();
     expect(result.warning).toContain("Invalid template 'nonexistent'");
     expect(result.warning).toContain('default');
+  });
+
+  it('should accept all valid template types', async () => {
+    const { createSeries } = await importContentModule();
+
+    const templates = ['default', 'tutorial', 'vlog', 'podcast'] as const;
+
+    for (const template of templates) {
+      const result = await createSeries(`Series ${template}`, `Testing ${template}`, template);
+      expect(result.success).toBe(true);
+      expect(result.series?.metadata.template).toBe(template);
+      expect(result.warning).toBeUndefined();
+    }
+  });
+
+  it('should accept maximum valid name length (100 chars)', async () => {
+    const { createSeries } = await importContentModule();
+
+    const maxName = 'a'.repeat(100);
+    const result = await createSeries(maxName);
+
+    expect(result.success).toBe(true);
+    expect(result.series?.name).toBe(maxName);
+  });
+
+  it('should allow hyphens, underscores, and spaces in series names', async () => {
+    const { createSeries } = await importContentModule();
+
+    const result = await createSeries('My-Series_Name With Spaces');
+
+    expect(result.success).toBe(true);
+    expect(result.series?.slug).toBe('my-series_name-with-spaces');
   });
 
   it('should reject empty series name', async () => {

@@ -467,10 +467,10 @@ export async function createSeries(
       };
     }
 
-    // Build path early for fail-fast duplicate check
+    // Build path early for fail-fast checks (security + duplicate)
     seriesPath = path.join(SERIES_DIR, seriesSlug);
 
-    // Verify path is within series directory (security check)
+    // Security: Verify path is within series directory (prevents traversal)
     const resolvedPath = path.resolve(seriesPath);
     const resolvedSeriesDir = path.resolve(SERIES_DIR) + path.sep;
     if (!resolvedPath.startsWith(resolvedSeriesDir)) {
@@ -528,7 +528,7 @@ export async function createSeries(
       }
     };
 
-    // Write series.yml
+    // Prepare file contents
     const metadataContent = '# Series Metadata\n' + yaml.dump(metadata, {
       indent: 2,
       lineWidth: -1,
@@ -536,11 +536,13 @@ export async function createSeries(
       quotingType: '"',
       forceQuotes: false
     });
-    await fs.writeFile(path.join(seriesPath, 'series.yml'), metadataContent, 'utf8');
-
-    // Create README.md with template-specific content
     const readmeContent = generateSeriesReadme(seriesName, metadata, templateType);
-    await fs.writeFile(path.join(seriesPath, 'README.md'), readmeContent, 'utf8');
+
+    // Write files in parallel (independent operations)
+    await Promise.all([
+      fs.writeFile(path.join(seriesPath, 'series.yml'), metadataContent, 'utf8'),
+      fs.writeFile(path.join(seriesPath, 'README.md'), readmeContent, 'utf8')
+    ]);
 
     debugLog('createSeries', 'Series created successfully', { slug: seriesSlug, template: templateType, hasWarning: !!templateWarning });
 
@@ -566,17 +568,25 @@ export async function createSeries(
     debugLog('createSeries', 'Error during creation', { error: errorMessage, seriesCreated });
 
     // Cleanup on failure
+    let cleanupFailed = false;
     if (seriesCreated && seriesPath) {
       try {
         debugLog('createSeries', 'Cleaning up failed series folder', { path: seriesPath });
         await fs.rm(seriesPath, { recursive: true, force: true });
       } catch (cleanupError) {
+        cleanupFailed = true;
         debugLog('createSeries', 'Cleanup failed', { error: String(cleanupError) });
       }
     }
+
+    let finalError = `Failed to create series: ${errorMessage}`;
+    if (cleanupFailed) {
+      finalError += '. Note: Automatic cleanup failed - manual removal may be required.';
+    }
+
     return {
       success: false,
-      error: `Failed to create series: ${error instanceof Error ? error.message : String(error)}`
+      error: finalError
     };
   }
 }
@@ -603,39 +613,46 @@ export async function listSeries(): Promise<{ success: boolean; series?: SeriesI
 
   try {
     const entries = await fs.readdir(SERIES_DIR, { withFileTypes: true });
-    const seriesList: SeriesInfo[] = [];
-    let orphanCount = 0;
 
-    for (const entry of entries) {
-      if (entry.isDirectory()) {
-        const seriesPath = path.join(SERIES_DIR, entry.name);
-        const metadataPath = path.join(seriesPath, 'series.yml');
+    // Filter to valid directories only (security: skip potentially malicious names)
+    const validDirs = entries.filter(entry =>
+      entry.isDirectory() &&
+      !entry.name.startsWith('.') &&  // Skip hidden directories
+      !entry.name.includes('..') &&   // Skip path traversal attempts
+      isValidSeriesName(entry.name)   // Only include valid series names
+    );
 
-        try {
-          const metadata = await readYamlFile<SeriesMetadata>(metadataPath);
-          seriesList.push({
-            name: metadata.name || entry.name,
-            slug: entry.name,
-            path: path.relative(BASE_DIR, seriesPath),
-            metadata
-          });
-        } catch {
-          // No series.yml - still include it with basic info
-          orphanCount++;
-          seriesList.push({
+    // Read all series metadata in parallel for performance
+    const seriesPromises = validDirs.map(async (entry): Promise<SeriesInfo> => {
+      const seriesPath = path.join(SERIES_DIR, entry.name);
+      const metadataPath = path.join(seriesPath, 'series.yml');
+
+      try {
+        const metadata = await readYamlFile<SeriesMetadata>(metadataPath);
+        return {
+          name: metadata.name || entry.name,
+          slug: entry.name,
+          path: path.relative(BASE_DIR, seriesPath),
+          metadata
+        };
+      } catch {
+        // No series.yml - still include it with basic info
+        return {
+          name: entry.name,
+          slug: entry.name,
+          path: path.relative(BASE_DIR, seriesPath),
+          metadata: {
             name: entry.name,
             slug: entry.name,
-            path: path.relative(BASE_DIR, seriesPath),
-            metadata: {
-              name: entry.name,
-              slug: entry.name,
-              description: '',
-              created: ''
-            }
-          });
-        }
+            description: '',
+            created: ''
+          }
+        };
       }
-    }
+    });
+
+    const seriesList = await Promise.all(seriesPromises);
+    const orphanCount = seriesList.filter(s => !s.metadata.created).length;
 
     debugLog('listSeries', 'Series listing complete', { total: seriesList.length, orphan: orphanCount });
 
@@ -650,7 +667,7 @@ export async function listSeries(): Promise<{ success: boolean; series?: SeriesI
 
     return {
       success: false,
-      error: `Failed to list series: ${errorMessage}. Ensure the series directory exists at ${SERIES_DIR}`
+      error: `Failed to list series: ${errorMessage}. Ensure the series directory exists and is accessible.`
     };
   }
 }

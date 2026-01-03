@@ -151,6 +151,15 @@ Creates a new series folder with metadata and README.
 
 **Note:** Invalid template values will fall back to `default` with a warning in the response.
 
+**Template Types:**
+
+| Template | Best For | Includes |
+|----------|----------|----------|
+| `default` | General content | Series overview section |
+| `tutorial` | Educational content | Learning objectives, prerequisites, episode structure |
+| `vlog` | Personal/lifestyle | Series theme, recurring segments |
+| `podcast` | Audio/interview content | Format description, episode length, segment structure |
+
 ### list_series
 
 Lists all series with their metadata.

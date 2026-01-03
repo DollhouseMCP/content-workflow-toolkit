@@ -368,6 +368,24 @@ function renderAssetPreview(file, dashboard) {
 }
 
 /**
+ * Update only the asset tree portion of the view.
+ * This preserves the search input element and its focus state,
+ * preventing the focus loss bug when typing in the search bar.
+ * @param {object} dashboard - Dashboard instance
+ */
+function updateAssetTreeOnly(dashboard) {
+  const assetTree = document.getElementById('asset-tree');
+  if (!assetTree || !dashboard._assetTreeData) return;
+
+  assetTree.innerHTML = renderAssetTree(
+    dashboard._assetTreeData,
+    0,
+    '',
+    dashboard.assetBrowserState
+  );
+}
+
+/**
  * Attach asset browser event listeners
  */
 function attachAssetBrowserListeners(dashboard) {
@@ -450,7 +468,8 @@ function attachAssetBrowserListeners(dashboard) {
   dashboard._assetInputHandler = (e) => {
     if (e.target.id === 'asset-search') {
       dashboard.assetBrowserState.searchQuery = e.target.value;
-      renderAssets(dashboard);
+      // Update only the tree portion to preserve search input focus
+      updateAssetTreeOnly(dashboard);
     }
   };
 

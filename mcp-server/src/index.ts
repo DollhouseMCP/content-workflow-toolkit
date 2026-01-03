@@ -20,7 +20,9 @@ import {
   createEpisode,
   updateEpisodeMetadata,
   getEpisodeDetails,
-  listEpisodes
+  listEpisodes,
+  createSeries,
+  listSeries
 } from './tools/content.js';
 import {
   getReleaseQueueContents,
@@ -152,6 +154,36 @@ const tools: Tool[] = [
           description: 'Filter by series name'
         }
       }
+    }
+  },
+  {
+    name: 'create_series',
+    description: 'Creates a new series folder with metadata (series.yml) and README. Returns the created series details.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        name: {
+          type: 'string',
+          description: 'The name of the series (e.g., "AI Tools Review", "Tutorial Series")'
+        },
+        description: {
+          type: 'string',
+          description: 'Optional description for the series'
+        },
+        template: {
+          type: 'string',
+          description: 'Optional template type (default, tutorial, vlog, podcast, etc.)'
+        }
+      },
+      required: ['name']
+    }
+  },
+  {
+    name: 'list_series',
+    description: 'Lists all series with their metadata.',
+    inputSchema: {
+      type: 'object',
+      properties: {}
     }
   },
 
@@ -343,6 +375,25 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case 'list_episodes': {
         const filter = args as { status?: string; series?: string } | undefined;
         const result = await listEpisodes(filter);
+        return {
+          content: [{ type: 'text', text: JSON.stringify(result, null, 2) }]
+        };
+      }
+
+      case 'create_series': {
+        const { name, description, template } = args as {
+          name: string;
+          description?: string;
+          template?: string;
+        };
+        const result = await createSeries(name, description, template);
+        return {
+          content: [{ type: 'text', text: JSON.stringify(result, null, 2) }]
+        };
+      }
+
+      case 'list_series': {
+        const result = await listSeries();
         return {
           content: [{ type: 'text', text: JSON.stringify(result, null, 2) }]
         };

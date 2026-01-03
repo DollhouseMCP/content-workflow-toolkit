@@ -75,8 +75,8 @@ function extractKeyPoints(sections: { heading: string; content: string }[]): str
       continue;
     }
 
-    // Extract bullet points from content
-    const bullets = section.content.match(/^[-*]\s+(.+)$/gm);
+    // Extract bullet points from content (multiline mode for ^ anchor)
+    const bullets = section.content.match(/^[-*]\s+.+$/gm);
     if (bullets) {
       for (const bullet of bullets.slice(0, 3)) {
         const point = bullet.replace(/^[-*]\s+/, '').trim();

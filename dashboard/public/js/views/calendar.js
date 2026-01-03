@@ -242,8 +242,9 @@ function renderCalendarView(items, releaseGroups, calendarState) {
   const prevMonthLastDay = new Date(year, month, 0).getDate();
   const prevMonthDays = startDayOfWeek;
 
-  // Calculate total cells needed
+  // Calculate total cells needed and number of week rows
   const totalCells = Math.ceil((daysInMonth + startDayOfWeek) / 7) * 7;
+  const weekRows = totalCells / 7;
 
   // Group items by date
   const itemsByDate = {};
@@ -264,7 +265,7 @@ function renderCalendarView(items, releaseGroups, calendarState) {
       <h3 class="calendar-month-year">${monthNames[month]} ${year}</h3>
       <button class="calendar-nav-btn" id="next-month">&rarr;</button>
     </div>
-    <div class="calendar-grid">
+    <div class="calendar-grid" style="--week-rows: ${weekRows}">
       <div class="calendar-weekday">Sun</div>
       <div class="calendar-weekday">Mon</div>
       <div class="calendar-weekday">Tue</div>

@@ -1390,6 +1390,10 @@ footer {
     align-items: center;
 }
 
+.calendar-filter-group .filter-select {
+    min-width: 180px;
+}
+
 /* Calendar Header */
 .calendar-header {
     display: flex;
@@ -1441,7 +1445,7 @@ footer {
 .calendar-grid {
     display: grid;
     grid-template-columns: repeat(7, 1fr);
-    grid-template-rows: auto repeat(6, 1fr);
+    grid-template-rows: auto repeat(var(--week-rows, 6), 1fr);
     gap: 1px;
     background-color: var(--border);
     border: 1px solid var(--border);

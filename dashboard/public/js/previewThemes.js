@@ -74,7 +74,8 @@ export function getSavedMermaidTheme() {
 
 /**
  * Apply base isolation styles to prevent dashboard styles from bleeding into preview
- * This creates a CSS reset boundary for the preview pane
+ * This creates a CSS reset boundary and provides default styling
+ * Adapted from Merview's approach
  */
 function applyPreviewIsolation() {
   let isolationStyle = document.getElementById('preview-isolation');
@@ -82,42 +83,96 @@ function applyPreviewIsolation() {
 
   isolationStyle = document.createElement('style');
   isolationStyle.id = 'preview-isolation';
+  // Default styles that apply when no theme is selected
+  // These provide a clean, readable base that can be overridden by themes
   isolationStyle.textContent = `
-    /* CSS Cascade Layers for proper style isolation */
-    @layer dashboard-base, preview-reset, preview-styles, syntax-theme;
+    /* Default preview styles - overridden by theme CSS */
+    .markdown-preview {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif !important;
+      font-size: 16px !important;
+      line-height: 1.6 !important;
+      color: #333 !important;
+      background: #fff !important;
+      padding: 20px !important;
+    }
 
-    /* Reset preview pane to prevent dashboard style bleeding */
-    @layer preview-reset {
-      .markdown-preview {
-        all: initial;
-        display: block;
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-        font-size: 16px;
-        line-height: 1.6;
-        color: #333;
-        background: #fff;
-        padding: 20px;
-        overflow-y: auto;
-        box-sizing: border-box;
-        width: 100%;
-        height: 100%;
-      }
+    .markdown-preview h1,
+    .markdown-preview h2,
+    .markdown-preview h3,
+    .markdown-preview h4,
+    .markdown-preview h5,
+    .markdown-preview h6 {
+      margin-top: 24px;
+      margin-bottom: 16px;
+      font-weight: 600;
+      line-height: 1.25;
+      color: #1a1a1a;
+    }
 
-      .markdown-preview * {
-        box-sizing: border-box;
-      }
+    .markdown-preview h1 { font-size: 2em; border-bottom: 1px solid #eee; padding-bottom: 0.3em; }
+    .markdown-preview h2 { font-size: 1.5em; border-bottom: 1px solid #eee; padding-bottom: 0.3em; }
+    .markdown-preview h3 { font-size: 1.25em; }
+    .markdown-preview h4 { font-size: 1em; }
 
-      /* Ensure mermaid diagrams render correctly */
-      .markdown-preview .mermaid {
-        background: transparent;
-        text-align: center;
-        margin: 1em 0;
-      }
+    .markdown-preview p { margin-bottom: 16px; }
 
-      .markdown-preview .mermaid svg {
-        max-width: 100%;
-        height: auto;
-      }
+    .markdown-preview a { color: #0366d6; text-decoration: none; }
+    .markdown-preview a:hover { text-decoration: underline; }
+
+    .markdown-preview ul,
+    .markdown-preview ol {
+      padding-left: 2em;
+      margin-bottom: 16px;
+    }
+
+    .markdown-preview li { margin-bottom: 0.25em; }
+
+    .markdown-preview blockquote {
+      padding: 0 1em;
+      color: #6a737d;
+      border-left: 0.25em solid #dfe2e5;
+      margin: 0 0 16px 0;
+    }
+
+    .markdown-preview table {
+      border-collapse: collapse;
+      width: 100%;
+      margin-bottom: 16px;
+    }
+
+    .markdown-preview th,
+    .markdown-preview td {
+      padding: 6px 13px;
+      border: 1px solid #dfe2e5;
+    }
+
+    .markdown-preview th {
+      font-weight: 600;
+      background-color: #f6f8fa;
+    }
+
+    .markdown-preview hr {
+      height: 0.25em;
+      margin: 24px 0;
+      background-color: #e1e4e8;
+      border: 0;
+    }
+
+    .markdown-preview img {
+      max-width: 100%;
+      height: auto;
+    }
+
+    /* Mermaid diagrams */
+    .markdown-preview .mermaid {
+      background: transparent;
+      text-align: center;
+      margin: 1em 0;
+    }
+
+    .markdown-preview .mermaid svg {
+      max-width: 100%;
+      height: auto;
     }
   `;
   document.head.appendChild(isolationStyle);

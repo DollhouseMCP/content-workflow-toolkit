@@ -38,7 +38,8 @@ function extractScriptSections(content: string): {
       currentContent = [];
 
       // Check for timestamp in heading like "## Hook (0:00 - 0:30)"
-      const timestampMatch = currentHeading.match(/\((\d+:\d+)/);
+      // Stricter regex: minutes can be any number, seconds must be 00-59
+      const timestampMatch = currentHeading.match(/\((\d{1,2}:[0-5]\d)/);
       if (timestampMatch) {
         const labelMatch = currentHeading.match(/^([^(]+)/);
         timestamps.push({
@@ -69,9 +70,9 @@ function extractKeyPoints(sections: { heading: string; content: string }[]): str
   const keyPoints: string[] = [];
 
   for (const section of sections) {
-    // Skip intro/hook sections for key points
+    // Skip intro/hook sections for key points (use word boundaries to avoid false matches)
     const heading = section.heading.toLowerCase();
-    if (heading.includes('hook') || heading.includes('intro') || heading.includes('outro')) {
+    if (/\b(hook|intro|outro)\b/.test(heading)) {
       continue;
     }
 
@@ -238,15 +239,21 @@ export async function generateSocialPosts(
     // Track if we have minimal content for warning
     const hasMinimalContent = !metadata.title && !scriptTitle && keyPoints.length === 0;
 
-    // Generate hashtags from tags or series
+    // Generate hashtags from tags or series (validate non-empty)
     const hashtags: string[] = [];
     if (metadata.tags && Array.isArray(metadata.tags)) {
       for (const tag of metadata.tags.slice(0, 3)) {
-        hashtags.push(`#${tag.replace(/\s+/g, '')}`);
+        const cleanTag = tag.replace(/[^a-zA-Z0-9]/g, '');
+        if (cleanTag.length > 0) {
+          hashtags.push(`#${cleanTag}`);
+        }
       }
     }
     if (series) {
-      hashtags.push(`#${series.replace(/[^a-zA-Z0-9]/g, '')}`);
+      const cleanSeries = series.replace(/[^a-zA-Z0-9]/g, '');
+      if (cleanSeries.length > 0) {
+        hashtags.push(`#${cleanSeries}`);
+      }
     }
     const hashtagStr = hashtags.join(' ');
 

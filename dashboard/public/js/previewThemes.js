@@ -2,6 +2,16 @@
 // Styles for Markdown preview, Code blocks, and Mermaid diagrams
 
 /**
+ * Available preview styles (markdown document styles)
+ */
+export const previewStyles = [
+  { name: 'Default', file: '', default: true },
+  { name: 'Clean', file: 'clean' },
+  { name: 'Dark', file: 'dark' },
+  { name: 'GitHub', file: 'github' }
+];
+
+/**
  * Available syntax highlighting themes for code blocks (highlight.js CDN)
  */
 export const syntaxThemes = [
@@ -27,21 +37,19 @@ export const mermaidThemes = [
   { name: 'Base', value: 'base' }
 ];
 
-/**
- * Available Markdown/preview styles
- */
-export const previewStyles = [
-  { name: 'Default', value: 'default', default: true },
-  { name: 'GitHub', value: 'github' },
-  { name: 'Clean', value: 'clean' }
-];
-
 // Storage keys
 const STORAGE_KEYS = {
+  previewStyle: 'dashboard-preview-style',
   syntaxTheme: 'dashboard-syntax-theme',
-  mermaidTheme: 'dashboard-mermaid-theme',
-  previewStyle: 'dashboard-preview-style'
+  mermaidTheme: 'dashboard-mermaid-theme'
 };
+
+/**
+ * Get saved preview style or default
+ */
+export function getSavedPreviewStyle() {
+  return localStorage.getItem(STORAGE_KEYS.previewStyle) || '';
+}
 
 /**
  * Get saved syntax theme or default
@@ -51,13 +59,6 @@ export function getSavedSyntaxTheme() {
   if (saved) return saved;
   const defaultTheme = syntaxThemes.find(t => t.default);
   return defaultTheme?.file || 'github-dark';
-}
-
-/**
- * Save syntax theme preference
- */
-export function saveSyntaxTheme(theme) {
-  localStorage.setItem(STORAGE_KEYS.syntaxTheme, theme);
 }
 
 /**
@@ -71,10 +72,25 @@ export function getSavedMermaidTheme() {
 }
 
 /**
- * Save mermaid theme preference
+ * Load preview style CSS
  */
-export function saveMermaidTheme(theme) {
-  localStorage.setItem(STORAGE_KEYS.mermaidTheme, theme);
+export function loadPreviewStyle(styleFile) {
+  const existingLink = document.getElementById('preview-style-css');
+  if (existingLink) {
+    existingLink.remove();
+  }
+
+  localStorage.setItem(STORAGE_KEYS.previewStyle, styleFile);
+
+  if (!styleFile) {
+    return; // Default style, no CSS to load
+  }
+
+  const link = document.createElement('link');
+  link.id = 'preview-style-css';
+  link.rel = 'stylesheet';
+  link.href = `/styles/${styleFile}.css`;
+  document.head.appendChild(link);
 }
 
 /**
@@ -86,20 +102,20 @@ export function loadSyntaxTheme(themeFile) {
     existingLink.remove();
   }
 
+  localStorage.setItem(STORAGE_KEYS.syntaxTheme, themeFile);
+
   const link = document.createElement('link');
   link.id = 'syntax-theme-css';
   link.rel = 'stylesheet';
   link.href = `https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/${themeFile}.min.css`;
   document.head.appendChild(link);
-
-  saveSyntaxTheme(themeFile);
 }
 
 /**
  * Apply mermaid theme and re-render diagrams
  */
 export async function applyMermaidTheme(theme) {
-  saveMermaidTheme(theme);
+  localStorage.setItem(STORAGE_KEYS.mermaidTheme, theme);
 
   // Reinitialize mermaid with new theme
   if (window.mermaid) {
@@ -129,9 +145,13 @@ export async function applyMermaidTheme(theme) {
 }
 
 /**
- * Initialize theme system
+ * Initialize theme system - load saved preferences
  */
 export function initializeThemes() {
+  // Load saved preview style
+  const previewStyle = getSavedPreviewStyle();
+  loadPreviewStyle(previewStyle);
+
   // Load saved syntax theme
   const syntaxTheme = getSavedSyntaxTheme();
   loadSyntaxTheme(syntaxTheme);
@@ -151,8 +171,13 @@ export function initializeThemes() {
  * Create theme selector dropdowns HTML
  */
 export function createThemeSelectorsHTML() {
+  const savedPreview = getSavedPreviewStyle();
   const savedSyntax = getSavedSyntaxTheme();
   const savedMermaid = getSavedMermaidTheme();
+
+  const previewOptions = previewStyles.map(t =>
+    `<option value="${t.file}" ${t.file === savedPreview ? 'selected' : ''}>${t.name}</option>`
+  ).join('');
 
   const syntaxOptions = syntaxThemes.map(t =>
     `<option value="${t.file}" ${t.file === savedSyntax ? 'selected' : ''}>${t.name}</option>`
@@ -164,6 +189,9 @@ export function createThemeSelectorsHTML() {
 
   return `
     <div class="preview-theme-selectors">
+      <select class="preview-theme-select" id="preview-style-select" title="Preview style">
+        ${previewOptions}
+      </select>
       <select class="preview-theme-select" id="syntax-theme-select" title="Code block theme">
         ${syntaxOptions}
       </select>
@@ -178,8 +206,15 @@ export function createThemeSelectorsHTML() {
  * Attach event listeners to theme selectors
  */
 export function attachThemeSelectorHandlers() {
+  const previewSelect = document.getElementById('preview-style-select');
   const syntaxSelect = document.getElementById('syntax-theme-select');
   const mermaidSelect = document.getElementById('mermaid-theme-select');
+
+  if (previewSelect) {
+    previewSelect.addEventListener('change', (e) => {
+      loadPreviewStyle(e.target.value);
+    });
+  }
 
   if (syntaxSelect) {
     syntaxSelect.addEventListener('change', (e) => {

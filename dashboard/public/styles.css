@@ -2600,6 +2600,7 @@ input[type="date"].edit-field::-webkit-calendar-picker-indicator {
     display: flex;
     gap: 0.75rem;
     align-items: center;
+    flex: 1;
 }
 
 .toolbar-right {
@@ -2644,13 +2645,14 @@ input[type="date"].edit-field::-webkit-calendar-picker-indicator {
 }
 
 .toolbar-search {
-    flex: 2;
-    min-width: 200px;
+    flex: 1;
+    min-width: 300px;
 }
 
 .toolbar-search .search-input {
     width: 100%;
     padding: 0.5rem 0.75rem;
+    box-sizing: border-box;
 }
 
 .current-folder-path {

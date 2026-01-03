@@ -3,15 +3,42 @@ import fs from 'fs/promises';
 import path from 'path';
 import os from 'os';
 
-// We need to mock the utils module before importing content
+// Import the actual utils module type for better type safety
+import type * as UtilsModule from '../utils.js';
+
+// Test directory state
 let testDir: string;
 let seriesDir: string;
+
+/**
+ * Helper to set up the mock for utils module with test directories.
+ * This reduces repetition across tests and improves type safety.
+ */
+async function setupUtilsMock(): Promise<void> {
+  vi.doMock('../utils.js', async () => {
+    const actual = await vi.importActual<typeof UtilsModule>('../utils.js');
+    return {
+      ...actual,
+      SERIES_DIR: seriesDir,
+      BASE_DIR: testDir
+    };
+  });
+}
+
+/**
+ * Helper to import content module after mock setup.
+ * Returns the createSeries and listSeries functions.
+ */
+async function importContentModule() {
+  return await import('./content.js');
+}
 
 // Setup test directory before each test
 beforeEach(async () => {
   testDir = await fs.mkdtemp(path.join(os.tmpdir(), 'mcp-test-'));
   seriesDir = path.join(testDir, 'series');
   await fs.mkdir(seriesDir, { recursive: true });
+  await setupUtilsMock();
 });
 
 // Cleanup after each test
@@ -24,17 +51,7 @@ afterEach(async () => {
 
 describe('createSeries', () => {
   it('should create a new series with required fields', async () => {
-    // Mock the utils module to use our test directory
-    vi.doMock('../utils.js', async () => {
-      const actual = await vi.importActual('../utils.js') as object;
-      return {
-        ...actual,
-        SERIES_DIR: seriesDir,
-        BASE_DIR: testDir
-      };
-    });
-
-    const { createSeries } = await import('./content.js');
+    const { createSeries } = await importContentModule();
 
     const result = await createSeries('Test Series');
 
@@ -53,16 +70,7 @@ describe('createSeries', () => {
   });
 
   it('should create series with description', async () => {
-    vi.doMock('../utils.js', async () => {
-      const actual = await vi.importActual('../utils.js') as object;
-      return {
-        ...actual,
-        SERIES_DIR: seriesDir,
-        BASE_DIR: testDir
-      };
-    });
-
-    const { createSeries } = await import('./content.js');
+    const { createSeries } = await importContentModule();
 
     const result = await createSeries('My Series', 'A great series about coding');
 
@@ -70,17 +78,22 @@ describe('createSeries', () => {
     expect(result.series?.metadata.description).toBe('A great series about coding');
   });
 
-  it('should reject empty series name', async () => {
-    vi.doMock('../utils.js', async () => {
-      const actual = await vi.importActual('../utils.js') as object;
-      return {
-        ...actual,
-        SERIES_DIR: seriesDir,
-        BASE_DIR: testDir
-      };
-    });
+  it('should create series with template parameter', async () => {
+    const { createSeries } = await importContentModule();
 
-    const { createSeries } = await import('./content.js');
+    const result = await createSeries('Tutorial Series', 'Learn stuff', 'tutorial');
+
+    expect(result.success).toBe(true);
+    expect(result.series?.metadata.template).toBe('tutorial');
+
+    // Verify README contains template-specific content
+    const readmePath = path.join(seriesDir, 'tutorial-series', 'README.md');
+    const readmeContent = await fs.readFile(readmePath, 'utf8');
+    expect(readmeContent).toContain('Tutorial Series');
+  });
+
+  it('should reject empty series name', async () => {
+    const { createSeries } = await importContentModule();
 
     const result = await createSeries('');
 
@@ -89,16 +102,7 @@ describe('createSeries', () => {
   });
 
   it('should reject series name that is too long', async () => {
-    vi.doMock('../utils.js', async () => {
-      const actual = await vi.importActual('../utils.js') as object;
-      return {
-        ...actual,
-        SERIES_DIR: seriesDir,
-        BASE_DIR: testDir
-      };
-    });
-
-    const { createSeries } = await import('./content.js');
+    const { createSeries } = await importContentModule();
 
     const longName = 'a'.repeat(101);
     const result = await createSeries(longName);
@@ -108,35 +112,22 @@ describe('createSeries', () => {
   });
 
   it('should reject description that is too long', async () => {
-    vi.doMock('../utils.js', async () => {
-      const actual = await vi.importActual('../utils.js') as object;
-      return {
-        ...actual,
-        SERIES_DIR: seriesDir,
-        BASE_DIR: testDir
-      };
-    });
-
-    const { createSeries } = await import('./content.js');
+    const { createSeries } = await importContentModule();
 
     const longDescription = 'a'.repeat(5001);
     const result = await createSeries('Test Series', longDescription);
 
     expect(result.success).toBe(false);
     expect(result.error).toContain('Description exceeds maximum length');
+
+    // Verify no folder was created (validation happens before folder creation)
+    const seriesPath = path.join(seriesDir, 'test-series');
+    const folderExists = await fs.access(seriesPath).then(() => true).catch(() => false);
+    expect(folderExists).toBe(false);
   });
 
   it('should reject invalid series name with special characters', async () => {
-    vi.doMock('../utils.js', async () => {
-      const actual = await vi.importActual('../utils.js') as object;
-      return {
-        ...actual,
-        SERIES_DIR: seriesDir,
-        BASE_DIR: testDir
-      };
-    });
-
-    const { createSeries } = await import('./content.js');
+    const { createSeries } = await importContentModule();
 
     const result = await createSeries('Test@Series!');
 
@@ -145,16 +136,7 @@ describe('createSeries', () => {
   });
 
   it('should reject duplicate series name', async () => {
-    vi.doMock('../utils.js', async () => {
-      const actual = await vi.importActual('../utils.js') as object;
-      return {
-        ...actual,
-        SERIES_DIR: seriesDir,
-        BASE_DIR: testDir
-      };
-    });
-
-    const { createSeries } = await import('./content.js');
+    const { createSeries } = await importContentModule();
 
     // Create first series
     await createSeries('Duplicate Test');
@@ -167,16 +149,7 @@ describe('createSeries', () => {
   });
 
   it('should strip HTML tags from description', async () => {
-    vi.doMock('../utils.js', async () => {
-      const actual = await vi.importActual('../utils.js') as object;
-      return {
-        ...actual,
-        SERIES_DIR: seriesDir,
-        BASE_DIR: testDir
-      };
-    });
-
-    const { createSeries } = await import('./content.js');
+    const { createSeries } = await importContentModule();
 
     const result = await createSeries('HTML Test', '<script>alert("xss")</script>Safe content');
 
@@ -185,16 +158,7 @@ describe('createSeries', () => {
   });
 
   it('should prevent path traversal attacks', async () => {
-    vi.doMock('../utils.js', async () => {
-      const actual = await vi.importActual('../utils.js') as object;
-      return {
-        ...actual,
-        SERIES_DIR: seriesDir,
-        BASE_DIR: testDir
-      };
-    });
-
-    const { createSeries } = await import('./content.js');
+    const { createSeries } = await importContentModule();
 
     const result = await createSeries('../../../malicious');
 
@@ -206,16 +170,7 @@ describe('createSeries', () => {
 
 describe('listSeries', () => {
   it('should return empty list when no series exist', async () => {
-    vi.doMock('../utils.js', async () => {
-      const actual = await vi.importActual('../utils.js') as object;
-      return {
-        ...actual,
-        SERIES_DIR: seriesDir,
-        BASE_DIR: testDir
-      };
-    });
-
-    const { listSeries } = await import('./content.js');
+    const { listSeries } = await importContentModule();
 
     const result = await listSeries();
 
@@ -225,16 +180,7 @@ describe('listSeries', () => {
   });
 
   it('should list created series', async () => {
-    vi.doMock('../utils.js', async () => {
-      const actual = await vi.importActual('../utils.js') as object;
-      return {
-        ...actual,
-        SERIES_DIR: seriesDir,
-        BASE_DIR: testDir
-      };
-    });
-
-    const { createSeries, listSeries } = await import('./content.js');
+    const { createSeries, listSeries } = await importContentModule();
 
     await createSeries('Series One', 'First series');
     await createSeries('Series Two', 'Second series');
@@ -248,19 +194,10 @@ describe('listSeries', () => {
   });
 
   it('should include series without metadata file', async () => {
-    vi.doMock('../utils.js', async () => {
-      const actual = await vi.importActual('../utils.js') as object;
-      return {
-        ...actual,
-        SERIES_DIR: seriesDir,
-        BASE_DIR: testDir
-      };
-    });
-
     // Create a series folder without metadata
     await fs.mkdir(path.join(seriesDir, 'orphan-series'), { recursive: true });
 
-    const { listSeries } = await import('./content.js');
+    const { listSeries } = await importContentModule();
 
     const result = await listSeries();
 

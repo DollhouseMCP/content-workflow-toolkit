@@ -310,6 +310,86 @@ export async function listEpisodes(
 }
 
 /**
+ * Generate README content based on template type
+ */
+function generateSeriesReadme(seriesName: string, metadata: SeriesMetadata, templateType: string): string {
+  const description = metadata.description || '*No description provided.*';
+
+  // Template-specific sections
+  const templateSections: Record<string, string> = {
+    tutorial: `
+## Learning Objectives
+
+Define what viewers will learn from this series.
+
+## Prerequisites
+
+List any knowledge or tools viewers should have before starting.
+
+## Episode Structure
+
+Each episode in this series follows a consistent format:
+1. Introduction & objectives
+2. Step-by-step demonstration
+3. Summary & next steps
+`,
+    vlog: `
+## Series Theme
+
+Define the recurring theme or focus of this vlog series.
+
+## Recurring Segments
+
+List any recurring segments or features.
+`,
+    podcast: `
+## Format
+
+Describe the podcast format (interview, solo, panel, etc.).
+
+## Episode Length
+
+Target duration for episodes.
+
+## Recurring Segments
+
+- Intro
+- Main discussion
+- Outro / Call to action
+`,
+    default: `
+## Series Overview
+
+Add details about what this series covers and who it's for.
+`
+  };
+
+  const templateSection = templateSections[templateType] || templateSections.default;
+
+  return `# ${seriesName}
+
+${description}
+
+## About This Series
+
+- **Created**: ${metadata.created}
+- **Template**: ${metadata.template}
+${templateSection}
+## Episodes
+
+Episodes will appear here as they are created.
+
+## Style Guide
+
+Add any series-specific style notes, branding guidelines, or recurring elements here.
+
+## Notes
+
+Additional planning notes and ideas for future episodes.
+`;
+}
+
+/**
  * Create a new series folder with metadata
  */
 export async function createSeries(
@@ -362,17 +442,18 @@ export async function createSeries(
       // Good - folder doesn't exist yet
     }
 
+    // Validate and sanitize description BEFORE creating folder
+    const sanitizedDescription = description?.replace(/<[^>]*>/g, '').trim() || '';
+    if (sanitizedDescription.length > MAX_DESCRIPTION_LENGTH) {
+      return { success: false, error: `Description exceeds maximum length of ${MAX_DESCRIPTION_LENGTH} characters` };
+    }
+
     // Create series folder
     await fs.mkdir(seriesPath, { recursive: false });
     seriesCreated = true;
 
-    // Validate and sanitize description
-    const sanitizedDescription = description?.replace(/<[^>]*>/g, '').trim() || '';
-    if (sanitizedDescription.length > MAX_DESCRIPTION_LENGTH) {
-      // Cleanup since we already created the folder
-      await fs.rm(seriesPath, { recursive: true, force: true });
-      return { success: false, error: `Description exceeds maximum length of ${MAX_DESCRIPTION_LENGTH} characters` };
-    }
+    // Determine template type (for future template-specific behavior)
+    const templateType = template || 'default';
 
     // Create series metadata
     const metadata: SeriesMetadata = {
@@ -380,7 +461,7 @@ export async function createSeries(
       slug: seriesSlug,
       description: sanitizedDescription,
       created: getCurrentDate(),
-      template: template || 'default',
+      template: templateType,
       settings: {
         default_distribution_profile: 'full',
         default_format: '4K'
@@ -397,24 +478,8 @@ export async function createSeries(
     });
     await fs.writeFile(path.join(seriesPath, 'series.yml'), metadataContent, 'utf8');
 
-    // Create README.md
-    const readmeContent = `# ${seriesName}
-
-${metadata.description || '*No description provided.*'}
-
-## About This Series
-
-- **Created**: ${metadata.created}
-- **Template**: ${metadata.template}
-
-## Episodes
-
-Episodes will appear here as they are created.
-
-## Notes
-
-Add any series-specific notes, style guides, or recurring elements here.
-`;
+    // Create README.md with template-specific content
+    const readmeContent = generateSeriesReadme(seriesName, metadata, templateType);
     await fs.writeFile(path.join(seriesPath, 'README.md'), readmeContent, 'utf8');
 
     // Return created series info

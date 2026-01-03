@@ -23,16 +23,23 @@ const FULLSCREEN_BG = 'rgba(255, 255, 255, 0.98)';
  */
 export function expandMermaid(mermaidId) {
   const mermaidElement = document.getElementById(mermaidId);
-  if (!mermaidElement) return;
+  if (!mermaidElement) {
+    console.warn(`Mermaid element with id "${mermaidId}" not found`);
+    return;
+  }
+
+  // Get SVG content and validate
+  const svgContent = mermaidElement.innerHTML;
+  if (!svgContent || !svgContent.includes('<svg')) {
+    console.warn('No valid SVG content found in mermaid element');
+    return;
+  }
 
   // Reset zoom state
   mermaidZoom.scale = 1;
   mermaidZoom.panX = 0;
   mermaidZoom.panY = 0;
   mermaidZoom.isPanning = false;
-
-  // Clone the SVG content
-  const svgContent = mermaidElement.innerHTML;
 
   // Create fullscreen overlay
   const overlay = document.createElement('div');
@@ -196,11 +203,16 @@ function handleMermaidEscape(e) {
 
 /**
  * Attach double-click handlers to all mermaid diagrams in a container
+ * Prevents duplicate handlers by checking data attribute
  * @param {HTMLElement} container - Container element with mermaid diagrams
  */
 export function attachMermaidFullscreenHandlers(container) {
   container.querySelectorAll('.mermaid[id]').forEach(el => {
+    // Skip if handler already attached
+    if (el.dataset.fullscreenAttached) return;
+
     el.addEventListener('dblclick', () => expandMermaid(el.id));
     el.style.cursor = 'zoom-in';
+    el.dataset.fullscreenAttached = 'true';
   });
 }

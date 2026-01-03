@@ -20,7 +20,7 @@ import {
   MAX_DESCRIPTION_LENGTH,
   MAX_SERIES_NAME_LENGTH
 } from '../utils.js';
-import type { Episode, EpisodeMetadata, WorkflowStage, VALID_WORKFLOW_STAGES, VALID_CONTENT_STATUSES } from '../types.js';
+import type { Episode, EpisodeMetadata, WorkflowStage, VALID_WORKFLOW_STAGES, VALID_CONTENT_STATUSES, SeriesMetadata, SeriesInfo } from '../types.js';
 
 /**
  * Create a new episode folder and metadata
@@ -307,31 +307,6 @@ export async function listEpisodes(
       error: `Failed to list episodes: ${error instanceof Error ? error.message : String(error)}`
     };
   }
-}
-
-/**
- * Series metadata structure
- */
-interface SeriesMetadata {
-  name: string;
-  slug: string;
-  description: string;
-  created: string;
-  template?: string;
-  settings?: {
-    default_distribution_profile?: string;
-    default_format?: string;
-  };
-}
-
-/**
- * Series info returned from createSeries
- */
-interface SeriesInfo {
-  name: string;
-  slug: string;
-  path: string;
-  metadata: SeriesMetadata;
 }
 
 /**

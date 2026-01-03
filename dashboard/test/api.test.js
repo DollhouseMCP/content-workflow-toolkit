@@ -1316,7 +1316,7 @@ describe('API Functional Tests', () => {
             if (item.target_date) {
               assert.ok(
                 dateRegex.test(item.target_date),
-                `staged item target_date should match date format`
+                'staged item target_date should match date format'
               );
             }
           }
@@ -1328,7 +1328,7 @@ describe('API Functional Tests', () => {
             if (item.release_date) {
               assert.ok(
                 dateRegex.test(item.release_date),
-                `released item release_date should match date format`
+                'released item release_date should match date format'
               );
             }
           }

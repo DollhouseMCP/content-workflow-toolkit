@@ -131,6 +131,41 @@ Lists all episodes with their metadata.
 - `status` (optional) - Filter by content status (draft, ready, staged, released)
 - `series` (optional) - Filter by series name
 
+### create_series
+
+Creates a new series folder with metadata and README.
+
+**Parameters:**
+- `name` (required) - Series name (e.g., "AI Tools Review")
+- `description` (optional) - Series description
+- `template` (optional) - Template type: `default`, `tutorial`, `vlog`, `podcast`
+
+**Example:**
+```json
+{
+  "name": "AI Tools Review",
+  "description": "Reviews of AI developer tools",
+  "template": "tutorial"
+}
+```
+
+**Note:** Invalid template values will fall back to `default` with a warning in the response.
+
+**Template Types:**
+
+| Template | Best For | Includes |
+|----------|----------|----------|
+| `default` | General content | Series overview section |
+| `tutorial` | Educational content | Learning objectives, prerequisites, episode structure |
+| `vlog` | Personal/lifestyle | Series theme, recurring segments |
+| `podcast` | Audio/interview content | Format description, episode length, segment structure |
+
+### list_series
+
+Lists all series with their metadata.
+
+**Parameters:** None
+
 ### get_release_queue
 
 Returns the contents of release-queue.yml.
@@ -169,6 +204,47 @@ Updates a workflow stage checkbox.
 Returns a summary of all content organized by status.
 
 **Parameters:** None
+
+## Debugging
+
+### Enable Debug Logging
+
+Set environment variables to enable detailed logging:
+
+```bash
+# Option 1: Using DEBUG
+DEBUG=true node dist/index.js
+
+# Option 2: Using MCP_DEBUG
+MCP_DEBUG=true node dist/index.js
+```
+
+Debug logs are written to stderr (to not interfere with MCP stdio communication) and include timestamps:
+
+```
+[2025-01-03T07:00:00.000Z] [content:createSeries] Starting series creation {"name":"Test","template":"tutorial"}
+[2025-01-03T07:00:00.010Z] [content:createSeries] Series created successfully {"slug":"test","template":"tutorial"}
+```
+
+### With Claude Desktop
+
+To enable debugging with Claude Desktop, modify your config:
+
+```json
+{
+  "mcpServers": {
+    "content-workflow": {
+      "command": "node",
+      "args": ["/path/to/mcp-server/dist/index.js"],
+      "env": {
+        "DEBUG": "true"
+      }
+    }
+  }
+}
+```
+
+Logs will appear in Claude Desktop's developer console or log files.
 
 ## License
 

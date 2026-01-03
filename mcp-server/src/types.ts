@@ -118,3 +118,43 @@ export const VALID_WORKFLOW_STAGES: WorkflowStage[] = [
 ];
 
 export const VALID_CONTENT_STATUSES = ['draft', 'ready', 'staged', 'released'] as const;
+
+/**
+ * Available series template types
+ */
+export type SeriesTemplate = 'default' | 'tutorial' | 'vlog' | 'podcast';
+
+/**
+ * Valid series template values
+ */
+export const VALID_SERIES_TEMPLATES: SeriesTemplate[] = [
+  'default',
+  'tutorial',
+  'vlog',
+  'podcast'
+];
+
+/**
+ * Series metadata structure stored in series.yml
+ */
+export interface SeriesMetadata {
+  name: string;
+  slug: string;
+  description: string;
+  created: string;
+  template?: SeriesTemplate;
+  settings?: {
+    default_distribution_profile?: string;
+    default_format?: string;
+  };
+}
+
+/**
+ * Series info returned from series operations
+ */
+export interface SeriesInfo {
+  name: string;
+  slug: string;
+  path: string;
+  metadata: SeriesMetadata;
+}

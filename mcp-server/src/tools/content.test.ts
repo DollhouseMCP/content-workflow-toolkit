@@ -92,6 +92,18 @@ describe('createSeries', () => {
     expect(readmeContent).toContain('Tutorial Series');
   });
 
+  it('should warn about invalid template and use default', async () => {
+    const { createSeries } = await importContentModule();
+
+    const result = await createSeries('Invalid Template Test', 'Test', 'nonexistent' as any);
+
+    expect(result.success).toBe(true);
+    expect(result.series?.metadata.template).toBe('default');
+    expect(result.warning).toBeDefined();
+    expect(result.warning).toContain("Invalid template 'nonexistent'");
+    expect(result.warning).toContain('default');
+  });
+
   it('should reject empty series name', async () => {
     const { createSeries } = await importContentModule();
 

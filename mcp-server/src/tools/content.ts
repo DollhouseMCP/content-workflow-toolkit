@@ -426,9 +426,10 @@ export async function createSeries(
   name: string,
   description?: string,
   template?: SeriesTemplate | string
-): Promise<{ success: boolean; series?: SeriesInfo; error?: string }> {
+): Promise<{ success: boolean; series?: SeriesInfo; warning?: string; error?: string }> {
   let seriesPath: string | null = null;
   let seriesCreated = false;
+  let templateWarning: string | undefined;
 
   debugLog('createSeries', 'Starting series creation', { name, template });
 
@@ -466,16 +467,7 @@ export async function createSeries(
       };
     }
 
-    // Validate template if provided
-    const templateType: SeriesTemplate = (template && VALID_SERIES_TEMPLATES.includes(template as SeriesTemplate))
-      ? (template as SeriesTemplate)
-      : 'default';
-
-    if (template && !VALID_SERIES_TEMPLATES.includes(template as SeriesTemplate)) {
-      debugLog('createSeries', 'Invalid template, using default', { provided: template, valid: VALID_SERIES_TEMPLATES });
-    }
-
-    // Build path
+    // Build path early for fail-fast duplicate check
     seriesPath = path.join(SERIES_DIR, seriesSlug);
 
     // Verify path is within series directory (security check)
@@ -486,7 +478,7 @@ export async function createSeries(
       return { success: false, error: 'Invalid path detected - possible path traversal attempt' };
     }
 
-    // Check if series already exists
+    // Fail-fast: Check if series already exists (moved earlier)
     try {
       await fs.access(seriesPath);
       debugLog('createSeries', 'Series already exists', { slug: seriesSlug });
@@ -496,6 +488,16 @@ export async function createSeries(
       };
     } catch {
       // Good - folder doesn't exist yet
+    }
+
+    // Validate template if provided (after duplicate check since it's cheaper)
+    const templateType: SeriesTemplate = (template && VALID_SERIES_TEMPLATES.includes(template as SeriesTemplate))
+      ? (template as SeriesTemplate)
+      : 'default';
+
+    if (template && !VALID_SERIES_TEMPLATES.includes(template as SeriesTemplate)) {
+      templateWarning = `Invalid template '${template}', using 'default'. Valid templates: ${VALID_SERIES_TEMPLATES.join(', ')}`;
+      debugLog('createSeries', 'Invalid template, using default', { provided: template, valid: VALID_SERIES_TEMPLATES });
     }
 
     // Validate and sanitize description BEFORE creating folder
@@ -540,10 +542,10 @@ export async function createSeries(
     const readmeContent = generateSeriesReadme(seriesName, metadata, templateType);
     await fs.writeFile(path.join(seriesPath, 'README.md'), readmeContent, 'utf8');
 
-    debugLog('createSeries', 'Series created successfully', { slug: seriesSlug, template: templateType });
+    debugLog('createSeries', 'Series created successfully', { slug: seriesSlug, template: templateType, hasWarning: !!templateWarning });
 
-    // Return created series info
-    return {
+    // Return created series info (include warning if template was invalid)
+    const result: { success: boolean; series: SeriesInfo; warning?: string } = {
       success: true,
       series: {
         name: seriesName,
@@ -552,6 +554,12 @@ export async function createSeries(
         metadata
       }
     };
+
+    if (templateWarning) {
+      result.warning = templateWarning;
+    }
+
+    return result;
 
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);

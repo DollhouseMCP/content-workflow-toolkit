@@ -198,6 +198,7 @@ export async function generateSocialPosts(
     threads?: string;
   };
   source?: string;
+  warning?: string;
   error?: string;
 }> {
   try {
@@ -233,6 +234,9 @@ export async function generateSocialPosts(
 
     const episodeTitle = metadata.title || scriptTitle || episode;
     const keyPoints = extractKeyPoints(sections);
+
+    // Track if we have minimal content for warning
+    const hasMinimalContent = !metadata.title && !scriptTitle && keyPoints.length === 0;
 
     // Generate hashtags from tags or series
     const hashtags: string[] = [];
@@ -329,11 +333,22 @@ export async function generateSocialPosts(
       posts.threads = threadsParts.join('\n').substring(0, 500);
     }
 
-    return {
+    const result: {
+      success: boolean;
+      posts: typeof posts;
+      source: string;
+      warning?: string;
+    } = {
       success: true,
       posts,
       source: 'template-based'
     };
+
+    if (hasMinimalContent) {
+      result.warning = 'Generated with minimal content. Consider adding a title to metadata or script for better posts.';
+    }
+
+    return result;
 
   } catch (error) {
     return {

@@ -356,4 +356,30 @@ describe('generateSocialPosts', () => {
     expect(result.success).toBe(true);
     expect(result.posts?.threads).toContain('my-episode-slug');
   });
+
+  it('should include warning when content is minimal', async () => {
+    await createTestEpisode('test-series', 'minimal-content', {
+      script: '# \n\n## Section\nNo key points here, just text.',
+      metadata: { content_status: 'draft' }
+    });
+
+    const { generateSocialPosts } = await importGenerationModule();
+    const result = await generateSocialPosts('test-series', 'minimal-content');
+
+    expect(result.success).toBe(true);
+    expect(result.warning).toContain('minimal content');
+  });
+
+  it('should not include warning when content is sufficient', async () => {
+    await createTestEpisode('test-series', 'good-content', {
+      script: '# Great Video Title\n\n## Topic\n- Key point one for viewers\n- Key point two here',
+      metadata: { title: 'Great Video', content_status: 'draft' }
+    });
+
+    const { generateSocialPosts } = await importGenerationModule();
+    const result = await generateSocialPosts('test-series', 'good-content');
+
+    expect(result.success).toBe(true);
+    expect(result.warning).toBeUndefined();
+  });
 });

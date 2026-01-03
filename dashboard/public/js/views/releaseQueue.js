@@ -87,10 +87,6 @@ export async function renderReleases(dashboard) {
 
   content.innerHTML = `
     <div class="view">
-      <div class="section-header">
-        <h2>Release Queue</h2>
-        <p>Manage coordinated releases and staging</p>
-      </div>
       ${sectionsHTML}
     </div>
   `;

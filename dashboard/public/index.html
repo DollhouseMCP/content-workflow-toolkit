@@ -16,22 +16,21 @@
 <body>
     <div id="app">
         <header>
-            <h1>Content Workflow Dashboard</h1>
+            <h1>Content Workflow</h1>
+            <nav class="main-nav">
+                <button class="nav-btn active" data-view="pipeline">Pipeline</button>
+                <button class="nav-btn" data-view="episodes">Episodes</button>
+                <button class="nav-btn" data-view="calendar">Calendar</button>
+                <button class="nav-btn" data-view="releases">Releases</button>
+                <button class="nav-btn" data-view="assets">Assets</button>
+                <button class="nav-btn" data-view="distribution">Distribution</button>
+            </nav>
             <div class="status-bar">
                 <span class="status-indicator" id="connection-status">
-                    <span class="dot"></span> Connected
+                    <span class="dot"></span>
                 </span>
             </div>
         </header>
-
-        <nav class="main-nav">
-            <button class="nav-btn active" data-view="pipeline">Pipeline</button>
-            <button class="nav-btn" data-view="episodes">Episodes</button>
-            <button class="nav-btn" data-view="calendar">Calendar</button>
-            <button class="nav-btn" data-view="releases">Release Queue</button>
-            <button class="nav-btn" data-view="assets">Assets</button>
-            <button class="nav-btn" data-view="distribution">Distribution</button>
-        </nav>
 
         <main id="content">
             <div class="loading">Loading...</div>

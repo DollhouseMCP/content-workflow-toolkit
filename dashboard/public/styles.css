@@ -24,27 +24,43 @@ body {
     background-color: var(--background);
     color: var(--text-primary);
     line-height: 1.6;
+    height: 100vh;
+    overflow: hidden;
 }
 
 #app {
-    min-height: 100vh;
+    height: 100vh;
     display: flex;
     flex-direction: column;
+    overflow: hidden;
 }
 
 /* Header */
 header {
     background-color: var(--surface);
     border-bottom: 1px solid var(--border);
-    padding: 1.5rem 2rem;
+    padding: 0.75rem 1.5rem;
     display: flex;
     justify-content: space-between;
     align-items: center;
+    gap: 1.5rem;
+    flex-shrink: 0;
 }
 
 header h1 {
-    font-size: 1.5rem;
+    font-size: 1.1rem;
     font-weight: 600;
+    white-space: nowrap;
+}
+
+header .main-nav {
+    display: flex;
+    gap: 0.25rem;
+    flex: 1;
+    justify-content: center;
+    border: none;
+    padding: 0;
+    background: none;
 }
 
 .status-bar {
@@ -74,24 +90,16 @@ header h1 {
     50% { opacity: 0.5; }
 }
 
-/* Navigation */
-.main-nav {
-    background-color: var(--surface);
-    border-bottom: 1px solid var(--border);
-    padding: 0 2rem;
-    display: flex;
-    gap: 0.5rem;
-}
-
+/* Navigation (inline in header) */
 .nav-btn {
     background: none;
     border: none;
     color: var(--text-secondary);
-    padding: 1rem 1.5rem;
+    padding: 0.5rem 1rem;
     cursor: pointer;
-    font-size: 0.875rem;
+    font-size: 0.8rem;
     font-weight: 500;
-    border-bottom: 2px solid transparent;
+    border-radius: 4px;
     transition: all 0.2s;
 }
 
@@ -102,16 +110,35 @@ header h1 {
 
 .nav-btn.active {
     color: var(--primary-color);
-    border-bottom-color: var(--primary-color);
+    background-color: rgba(37, 99, 235, 0.1);
 }
 
 /* Main Content */
 main {
     flex: 1;
-    padding: 2rem;
-    max-width: 1400px;
+    padding: 1.5rem 2rem;
+    max-width: calc(100% - 4rem);
     width: 100%;
     margin: 0 auto;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+/* Allow wider content on large screens */
+@media (min-width: 1600px) {
+    main {
+        max-width: calc(100% - 6rem);
+        padding: 2rem 3rem;
+    }
+}
+
+@media (min-width: 2000px) {
+    main {
+        max-width: calc(100% - 8rem);
+        padding: 2rem 4rem;
+    }
 }
 
 .loading {
@@ -124,6 +151,14 @@ main {
 /* Content Views */
 .view {
     animation: fadeIn 0.3s;
+}
+
+/* Full-height views that should fill to footer */
+.view.view-full-height {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
 }
 
 @keyframes fadeIn {
@@ -234,8 +269,14 @@ main {
     color: var(--error);
 }
 
-/* Code/Pre */
-pre {
+/*
+ * Code/Pre styles for dashboard UI only
+ * Preview pane has its own isolated styles via CSS layers
+ * These selectors specifically target dashboard UI areas, not the preview
+ */
+.modal-content pre,
+.card pre,
+.mermaid-error {
     background-color: var(--background);
     border: 1px solid var(--border);
     border-radius: 4px;
@@ -244,7 +285,9 @@ pre {
     font-size: 0.875rem;
 }
 
-code {
+.modal-content code,
+.card code,
+.asset-file-info code {
     font-family: 'Courier New', monospace;
     color: var(--primary-color);
 }
@@ -304,7 +347,8 @@ footer {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
     gap: 1.5rem;
-    min-height: 600px;
+    height: calc(100vh - 280px);
+    min-height: 400px;
 }
 
 .kanban-column {
@@ -313,7 +357,7 @@ footer {
     border-radius: 8px;
     display: flex;
     flex-direction: column;
-    min-height: 500px;
+    overflow: hidden;
 }
 
 .column-header {
@@ -536,16 +580,16 @@ footer {
     align-items: center;
     justify-content: center;
     z-index: 1000;
-    padding: 2rem;
+    padding: 1.5rem;
 }
 
 .modal {
     background-color: var(--surface);
     border: 1px solid var(--border);
     border-radius: 8px;
-    max-width: 1200px;
+    max-width: 90vw;
     width: 100%;
-    max-height: 90vh;
+    max-height: 92vh;
     overflow-y: auto;
     animation: modalSlideIn 0.3s;
 }
@@ -562,7 +606,7 @@ footer {
 }
 
 .modal-header {
-    padding: 1.5rem;
+    padding: 1.5rem 2rem;
     border-bottom: 1px solid var(--border);
     display: flex;
     justify-content: space-between;
@@ -570,14 +614,14 @@ footer {
 }
 
 .modal-title {
-    font-size: 1.25rem;
+    font-size: 1.5rem;
     font-weight: 600;
     margin-bottom: 0.5rem;
 }
 
 .modal-subtitle {
     color: var(--text-secondary);
-    font-size: 0.875rem;
+    font-size: 1rem;
 }
 
 .modal-close {
@@ -602,41 +646,42 @@ footer {
 }
 
 .modal-body {
-    padding: 1.5rem;
+    padding: 2rem;
 }
 
 .modal-section {
-    margin-bottom: 1.5rem;
+    margin-bottom: 2rem;
 }
 
 .modal-section h3 {
-    font-size: 0.875rem;
+    font-size: 1rem;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.05em;
     color: var(--text-secondary);
-    margin-bottom: 0.75rem;
+    margin-bottom: 1rem;
 }
 
 .modal-section p {
     color: var(--text-secondary);
-    line-height: 1.6;
+    line-height: 1.7;
+    font-size: 1rem;
 }
 
 .metadata-grid {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
-    gap: 1rem;
+    gap: 1.25rem;
 }
 
 .metadata-item {
     display: flex;
     flex-direction: column;
-    gap: 0.25rem;
+    gap: 0.375rem;
 }
 
 .metadata-label {
-    font-size: 0.75rem;
+    font-size: 0.875rem;
     font-weight: 500;
     text-transform: uppercase;
     letter-spacing: 0.05em;
@@ -644,31 +689,32 @@ footer {
 }
 
 .metadata-value {
-    font-size: 0.875rem;
+    font-size: 1rem;
     color: var(--text-primary);
 }
 
 .workflow-checklist {
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
+    gap: 0.75rem;
 }
 
 .workflow-item {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
-    font-size: 0.875rem;
+    gap: 0.75rem;
+    font-size: 1rem;
 }
 
 .workflow-checkbox {
-    width: 16px;
-    height: 16px;
-    border-radius: 3px;
+    width: 20px;
+    height: 20px;
+    border-radius: 4px;
     background-color: var(--surface-hover);
     display: flex;
     align-items: center;
     justify-content: center;
+    flex-shrink: 0;
 }
 
 .workflow-checkbox.checked {
@@ -678,7 +724,7 @@ footer {
 
 .workflow-checkbox.checked::after {
     content: '✓';
-    font-size: 0.75rem;
+    font-size: 0.875rem;
 }
 
 /* Responsive Design */
@@ -939,7 +985,6 @@ footer {
 .asset-browser-controls {
     display: flex;
     gap: 1rem;
-    margin-bottom: 1.5rem;
     flex-wrap: wrap;
     align-items: center;
 }
@@ -972,9 +1017,24 @@ footer {
 
 .asset-browser-layout {
     display: grid;
-    grid-template-columns: 350px 1fr;
+    grid-template-columns: minmax(280px, 350px) 1fr;
     gap: 1.5rem;
-    min-height: 600px;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+}
+
+/* Wider tree panel on larger screens */
+@media (min-width: 1600px) {
+    .asset-browser-layout {
+        grid-template-columns: minmax(320px, 400px) 1fr;
+    }
+}
+
+@media (min-width: 2000px) {
+    .asset-browser-layout {
+        grid-template-columns: minmax(350px, 450px) 1fr;
+    }
 }
 
 /* Asset Tree Panel */
@@ -985,17 +1045,19 @@ footer {
     overflow: hidden;
     display: flex;
     flex-direction: column;
+    min-height: 0;
 }
 
 .asset-tree-header {
-    padding: 1rem 1.25rem;
+    padding: 0.75rem 1rem;
     border-bottom: 1px solid var(--border);
     font-weight: 600;
-    font-size: 0.875rem;
+    font-size: 0.8rem;
     text-transform: uppercase;
     letter-spacing: 0.05em;
     color: var(--text-secondary);
     background-color: var(--background);
+    flex-shrink: 0;
 }
 
 .asset-tree {
@@ -1089,17 +1151,52 @@ footer {
     overflow: hidden;
     display: flex;
     flex-direction: column;
+    min-height: 0;
 }
 
 .asset-preview-header {
-    padding: 1rem 1.25rem;
+    padding: 0.5rem 1rem;
     border-bottom: 1px solid var(--border);
     font-weight: 600;
-    font-size: 0.875rem;
+    font-size: 0.8rem;
     text-transform: uppercase;
     letter-spacing: 0.05em;
     color: var(--text-secondary);
     background-color: var(--background);
+    flex-shrink: 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+/* Preview Theme Selectors */
+.preview-theme-selectors {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.preview-theme-select {
+    background: var(--surface);
+    color: var(--text-primary);
+    border: 1px solid var(--border);
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.7rem;
+    text-transform: none;
+    font-weight: normal;
+    letter-spacing: normal;
+}
+
+.preview-theme-select:hover {
+    background: var(--surface-hover);
+    border-color: var(--primary-color);
+}
+
+.preview-theme-select:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
 }
 
 #asset-preview-content {
@@ -1131,7 +1228,8 @@ footer {
     display: flex;
     align-items: center;
     justify-content: center;
-    min-height: 400px;
+    flex: 1;
+    min-height: 200px;
     padding: 1rem;
 }
 
@@ -1148,14 +1246,14 @@ footer {
 
 .asset-preview-media img {
     max-width: 100%;
-    max-height: 500px;
+    max-height: 100%;
     object-fit: contain;
     display: block;
 }
 
 .asset-preview-media video {
     max-width: 100%;
-    max-height: 500px;
+    max-height: 100%;
     display: block;
 }
 
@@ -1165,13 +1263,17 @@ footer {
 }
 
 .asset-preview-document {
-    min-height: 500px;
+    flex: 1;
+    min-height: 200px;
     background-color: var(--background);
+    overflow-y: auto;
+    padding: 1.5rem;
 }
 
 .asset-preview-document iframe {
     width: 100%;
-    height: 500px;
+    height: 100%;
+    min-height: 400px;
     border: none;
 }
 
@@ -1288,9 +1390,10 @@ footer {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 1.5rem;
+    margin-bottom: 1rem;
     flex-wrap: wrap;
     gap: 1rem;
+    flex-shrink: 0;
 }
 
 .calendar-view-toggle {
@@ -1330,16 +1433,21 @@ footer {
     align-items: center;
 }
 
+.calendar-filter-group .filter-select {
+    min-width: 180px;
+}
+
 /* Calendar Header */
 .calendar-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 1.5rem;
-    padding: 1rem;
+    margin-bottom: 1rem;
+    padding: 0.75rem 1rem;
     background-color: var(--surface);
     border: 1px solid var(--border);
     border-radius: 8px;
+    flex-shrink: 0;
 }
 
 .calendar-month-year {
@@ -1367,15 +1475,27 @@ footer {
     border-color: var(--primary-color);
 }
 
+/* Calendar content wrapper for flex layout */
+.calendar-content-wrapper {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
 /* Calendar Grid */
 .calendar-grid {
     display: grid;
     grid-template-columns: repeat(7, 1fr);
+    grid-template-rows: auto repeat(var(--week-rows, 6), 1fr);
     gap: 1px;
     background-color: var(--border);
     border: 1px solid var(--border);
     border-radius: 8px;
     overflow: hidden;
+    flex: 1;
+    min-height: 0;
 }
 
 .calendar-weekday {
@@ -1391,12 +1511,13 @@ footer {
 
 .calendar-day {
     background-color: var(--surface);
-    min-height: 100px;
+    min-height: 0;
     padding: 0.5rem;
     cursor: pointer;
     transition: all 0.2s;
     display: flex;
     flex-direction: column;
+    overflow: hidden;
 }
 
 .calendar-day.other-month {
@@ -1426,6 +1547,8 @@ footer {
     flex-direction: column;
     gap: 0.25rem;
     flex: 1;
+    overflow-y: auto;
+    min-height: 0;
 }
 
 .calendar-day-item {
@@ -1465,6 +1588,9 @@ footer {
     display: flex;
     flex-direction: column;
     gap: 1.5rem;
+    flex: 1;
+    overflow-y: auto;
+    min-height: 0;
 }
 
 .release-date-group {
@@ -1688,130 +1814,30 @@ footer {
     }
 }
 
-/* Markdown Preview Styles */
+/*
+ * Markdown Preview Container - STRUCTURAL STYLES ONLY
+ * All typography and colors come from preview theme CSS files
+ * loaded dynamically via previewThemes.js
+ */
 .markdown-preview {
-    background: var(--surface);
-    border-radius: 8px;
-    overflow: auto;
-    max-height: 500px;
+    flex: 1 !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    display: block !important;
+    position: relative !important;
+    /* Prevent dashboard styles from bleeding in */
+    border-radius: 0;
 }
 
-.markdown-content {
-    padding: 1.5rem;
-    line-height: 1.7;
-}
-
-.markdown-content h1,
-.markdown-content h2,
-.markdown-content h3,
-.markdown-content h4,
-.markdown-content h5,
-.markdown-content h6 {
-    color: var(--text-primary);
-    margin-top: 1.5em;
-    margin-bottom: 0.5em;
-    font-weight: 600;
-}
-
-.markdown-content h1 { font-size: 1.8rem; border-bottom: 1px solid var(--border); padding-bottom: 0.3em; }
-.markdown-content h2 { font-size: 1.5rem; border-bottom: 1px solid var(--border); padding-bottom: 0.3em; }
-.markdown-content h3 { font-size: 1.25rem; }
-.markdown-content h4 { font-size: 1.1rem; }
-
-.markdown-content p {
-    margin-bottom: 1em;
-    color: var(--text-secondary);
-}
-
-.markdown-content a {
-    color: var(--primary-color);
-    text-decoration: none;
-}
-
-.markdown-content a:hover {
-    text-decoration: underline;
-}
-
-.markdown-content code {
-    background: var(--background);
-    padding: 0.2em 0.4em;
-    border-radius: 4px;
-    font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
-    font-size: 0.9em;
-}
-
-.markdown-content pre {
-    background: var(--background);
-    padding: 1rem;
-    border-radius: 8px;
-    overflow-x: auto;
-    margin: 1em 0;
-}
-
-.markdown-content pre code {
-    padding: 0;
-    background: none;
-}
-
-.markdown-content ul,
-.markdown-content ol {
-    margin-left: 1.5em;
-    margin-bottom: 1em;
-    color: var(--text-secondary);
-}
-
-.markdown-content li {
-    margin-bottom: 0.25em;
-}
-
-.markdown-content blockquote {
-    border-left: 4px solid var(--primary-color);
-    padding-left: 1em;
-    margin: 1em 0;
-    color: var(--text-secondary);
-    font-style: italic;
-}
-
-.markdown-content hr {
-    border: none;
-    border-top: 1px solid var(--border);
-    margin: 2em 0;
-}
-
-.markdown-content table {
-    width: 100%;
-    border-collapse: collapse;
-    margin: 1em 0;
-}
-
-.markdown-content th,
-.markdown-content td {
-    border: 1px solid var(--border);
-    padding: 0.5em 1em;
-    text-align: left;
-}
-
-.markdown-content th {
-    background: var(--background);
-    font-weight: 600;
-}
-
-.markdown-content img {
-    max-width: 100%;
-    border-radius: 8px;
-}
-
-/* Mermaid diagrams */
-.mermaid-container {
-    background: var(--surface);
-    padding: 1rem;
-    border-radius: 8px;
-    margin: 1em 0;
+/* Mermaid diagram containers - structural only */
+.mermaid {
     text-align: center;
+    margin: 1em 0;
 }
 
-.mermaid-container svg {
+.mermaid svg {
     max-width: 100%;
+    height: auto;
 }
 
 .mermaid-error {
@@ -2471,18 +2497,20 @@ input[type="date"].edit-field::-webkit-calendar-picker-indicator {
     justify-content: space-between;
     align-items: center;
     margin-bottom: 1rem;
-    padding: 1rem;
+    padding: 0.75rem 1rem;
     background-color: var(--surface);
     border: 1px solid var(--border);
     border-radius: 8px;
     gap: 1rem;
     flex-wrap: wrap;
+    flex-shrink: 0;
 }
 
 .toolbar-left {
     display: flex;
     gap: 0.75rem;
     align-items: center;
+    flex: 1;
 }
 
 .toolbar-right {
@@ -2524,6 +2552,17 @@ input[type="date"].edit-field::-webkit-calendar-picker-indicator {
 .toolbar-btn .btn-icon {
     font-size: 1rem;
     font-weight: 700;
+}
+
+.toolbar-search {
+    flex: 1;
+    min-width: 300px;
+}
+
+.toolbar-search .search-input {
+    width: 100%;
+    padding: 0.5rem 0.75rem;
+    box-sizing: border-box;
 }
 
 .current-folder-path {
@@ -2778,4 +2817,124 @@ input[type="date"].edit-field::-webkit-calendar-picker-indicator {
     .form-actions .btn {
         width: 100%;
     }
+}
+
+/* =============================================================================
+   MERMAID FULLSCREEN
+   Fullscreen overlay for viewing Mermaid diagrams with zoom/pan
+   Adapted from Merview (https://github.com/mickdarling/merview)
+   ============================================================================= */
+
+/* Fullscreen overlay */
+.mermaid-fullscreen-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(255, 255, 255, 0.98);
+    z-index: 10000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    box-sizing: border-box;
+}
+
+/* Close button */
+.mermaid-fullscreen-overlay .mermaid-close-btn {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    background: #e74c3c;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    padding: 10px 20px;
+    cursor: pointer;
+    font-size: 16px;
+    font-weight: 600;
+    z-index: 10001;
+}
+
+.mermaid-fullscreen-overlay .mermaid-close-btn:hover {
+    background: #c0392b;
+}
+
+/* Content area for pan/zoom */
+.mermaid-fullscreen-overlay .mermaid-fullscreen-content {
+    width: 95vw;
+    height: 85vh;
+    overflow: hidden;
+    cursor: grab;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.mermaid-fullscreen-overlay .mermaid-fullscreen-content:active {
+    cursor: grabbing;
+}
+
+.mermaid-fullscreen-overlay .mermaid-fullscreen-content svg {
+    transform-origin: center center;
+    transition: none;
+    max-width: 100%;
+    max-height: 100%;
+}
+
+/* Edge label visibility in fullscreen mode */
+.mermaid-fullscreen-overlay .edgeLabel text {
+    fill: #000 !important;
+}
+
+.mermaid-fullscreen-overlay .edgeLabel rect.background,
+.mermaid-fullscreen-overlay .edgeLabel rect {
+    fill: rgba(255, 255, 255, 0.85) !important;
+}
+
+/* Zoom controls */
+.mermaid-fullscreen-overlay .mermaid-zoom-controls {
+    position: absolute;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    background: rgba(0, 0, 0, 0.8);
+    padding: 8px 16px;
+    border-radius: 8px;
+    z-index: 10001;
+}
+
+.mermaid-fullscreen-overlay .mermaid-zoom-btn {
+    background: #3498db;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    padding: 8px 14px;
+    cursor: pointer;
+    font-size: 16px;
+    font-weight: bold;
+}
+
+.mermaid-fullscreen-overlay .mermaid-zoom-btn:hover {
+    background: #2980b9;
+}
+
+.mermaid-fullscreen-overlay .mermaid-zoom-level {
+    color: white;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    min-width: 50px;
+    justify-content: center;
+}
+
+/* Double-click hint cursor on mermaid diagrams in preview */
+.markdown-content .mermaid,
+.asset-preview-document .mermaid {
+    cursor: zoom-in;
 }

@@ -61,12 +61,7 @@ export async function renderCalendar(dashboard) {
   const filteredItems = filterReleaseItems(releaseItems, dashboard.calendarState.filter);
 
   content.innerHTML = `
-    <div class="view">
-      <div class="section-header">
-        <h2>Release Calendar</h2>
-        <p>Scheduled and released content timeline</p>
-      </div>
-
+    <div class="view view-full-height">
       ${releaseQueueWarning}
 
       <div class="calendar-controls">
@@ -83,7 +78,7 @@ export async function renderCalendar(dashboard) {
         </div>
       </div>
 
-      <div id="calendar-content">
+      <div id="calendar-content" class="calendar-content-wrapper">
         ${dashboard.calendarState.viewMode === 'calendar'
     ? renderCalendarView(filteredItems, releaseGroups, dashboard.calendarState)
     : renderListView(filteredItems, releaseGroups)}
@@ -247,8 +242,9 @@ function renderCalendarView(items, releaseGroups, calendarState) {
   const prevMonthLastDay = new Date(year, month, 0).getDate();
   const prevMonthDays = startDayOfWeek;
 
-  // Calculate total cells needed
+  // Calculate total cells needed and number of week rows
   const totalCells = Math.ceil((daysInMonth + startDayOfWeek) / 7) * 7;
+  const weekRows = totalCells / 7;
 
   // Group items by date
   const itemsByDate = {};
@@ -269,7 +265,7 @@ function renderCalendarView(items, releaseGroups, calendarState) {
       <h3 class="calendar-month-year">${monthNames[month]} ${year}</h3>
       <button class="calendar-nav-btn" id="next-month">&rarr;</button>
     </div>
-    <div class="calendar-grid">
+    <div class="calendar-grid" style="--week-rows: ${weekRows}">
       <div class="calendar-weekday">Sun</div>
       <div class="calendar-weekday">Mon</div>
       <div class="calendar-weekday">Tue</div>

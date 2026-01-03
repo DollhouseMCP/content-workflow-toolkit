@@ -60,6 +60,12 @@ export function hasMatchingFilesInDir(node, state) {
     return matchesAssetFilter(node, state);
   }
 
+  // When no filters are active, show all directories including empty ones
+  const noActiveFilter = !state.searchQuery && state.filterType === 'all';
+  if (noActiveFilter) {
+    return true;
+  }
+
   if (node.children && node.children.length > 0) {
     return node.children.some(child => hasMatchingFilesInDir(child, state));
   }

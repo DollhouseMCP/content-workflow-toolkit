@@ -11,6 +11,8 @@ import { renderCalendar } from './views/calendar.js';
 import { renderReleases } from './views/releaseQueue.js';
 import { renderAssets } from './views/assets.js';
 import { renderDistribution } from './views/distribution.js';
+import { attachMermaidFullscreenHandlers } from './mermaid-fullscreen.js';
+import { getSavedMermaidTheme } from './previewThemes.js';
 
 /**
  * Dashboard - Main application class
@@ -57,12 +59,13 @@ class Dashboard {
   }
 
   setupMarkdown() {
-    // Initialize mermaid for diagram rendering
+    // Initialize mermaid for diagram rendering with saved theme
     try {
       if (typeof mermaid !== 'undefined') {
+        const savedMermaidTheme = getSavedMermaidTheme();
         mermaid.initialize({
           startOnLoad: false,
-          theme: 'dark',
+          theme: savedMermaidTheme,
           securityLevel: 'loose'
         });
       }
@@ -114,17 +117,28 @@ class Dashboard {
     // Render mermaid diagrams after a short delay
     if (mermaidBlocks.length > 0 && typeof mermaid !== 'undefined') {
       setTimeout(async () => {
+        // Get background color based on saved theme
+        const savedTheme = getSavedMermaidTheme();
+        const bgColor = savedTheme === 'dark' ? '#1e1e1e' : '#ffffff';
+
         for (const block of mermaidBlocks) {
           const container = document.getElementById(block.id);
           if (container) {
             try {
               const { svg } = await mermaid.render(`${block.id}-svg`, block.diagram);
+              // Add mermaid class for fullscreen functionality and store source for theme switching
+              container.classList.add('mermaid');
+              container.setAttribute('data-mermaid-source', block.diagram);
+              container.setAttribute('data-processed', 'true');
+              container.style.backgroundColor = bgColor;
               container.innerHTML = svg;
             } catch (e) {
               container.innerHTML = `<pre class="mermaid-error">Diagram error: ${e.message}</pre>`;
             }
           }
         }
+        // Attach fullscreen handlers to all rendered mermaid diagrams
+        attachMermaidFullscreenHandlers(document);
       }, DASHBOARD_CONFIG.MERMAID_RENDER_DELAY);
     }
 

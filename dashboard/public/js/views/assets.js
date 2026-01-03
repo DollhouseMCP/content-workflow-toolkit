@@ -2,8 +2,9 @@
 
 import { DASHBOARD_CONFIG } from '../config.js';
 import { escapeHtml, formatFileSize, formatFileDate, getFileIcon } from '../utils.js';
-import { showModal, closeModal } from '../modal.js';
+import { showModal, closeModal, showNotification } from '../modal.js';
 import { matchesAssetFilter, hasMatchingFilesInDir } from '../utils/assetFilters.js';
+import { createThemeSelectorsHTML, attachThemeSelectorHandlers, initializeThemes } from '../previewThemes.js';
 
 /**
  * Render the asset browser view
@@ -36,12 +37,7 @@ export async function renderAssets(dashboard) {
   dashboard._assetTreeData = result.data;
 
   content.innerHTML = `
-    <div class="view">
-      <div class="section-header">
-        <h2>Asset Browser</h2>
-        <p>Browse and preview media assets</p>
-      </div>
-
+    <div class="view view-full-height">
       <div class="asset-browser-toolbar">
         <div class="toolbar-left">
           <button class="toolbar-btn primary" id="upload-btn">
@@ -52,27 +48,24 @@ export async function renderAssets(dashboard) {
             <span class="btn-icon">+</span>
             New Folder
           </button>
+          <div class="toolbar-search">
+            <input type="text" class="search-input" id="asset-search" placeholder="Search files..." value="${escapeHtml(dashboard.assetBrowserState.searchQuery)}">
+          </div>
+          <div class="filter-group">
+            <label class="filter-label">Type:</label>
+            <select class="filter-select" id="asset-type-filter">
+              <option value="all" ${dashboard.assetBrowserState.filterType === 'all' ? 'selected' : ''}>All Files</option>
+              <option value="image" ${dashboard.assetBrowserState.filterType === 'image' ? 'selected' : ''}>Images</option>
+              <option value="video" ${dashboard.assetBrowserState.filterType === 'video' ? 'selected' : ''}>Videos</option>
+              <option value="audio" ${dashboard.assetBrowserState.filterType === 'audio' ? 'selected' : ''}>Audio</option>
+              <option value="document" ${dashboard.assetBrowserState.filterType === 'document' ? 'selected' : ''}>Documents</option>
+            </select>
+          </div>
         </div>
         <div class="toolbar-right">
           <span class="current-folder-path" id="current-folder-path">
             ${escapeHtml(dashboard.assetBrowserState.selectedFolder || 'assets')}
           </span>
-        </div>
-      </div>
-
-      <div class="asset-browser-controls">
-        <div class="search-box">
-          <input type="text" class="search-input" id="asset-search" placeholder="Search files..." value="${escapeHtml(dashboard.assetBrowserState.searchQuery)}">
-        </div>
-        <div class="filter-group">
-          <label class="filter-label">Type:</label>
-          <select class="filter-select" id="asset-type-filter">
-            <option value="all" ${dashboard.assetBrowserState.filterType === 'all' ? 'selected' : ''}>All Files</option>
-            <option value="image" ${dashboard.assetBrowserState.filterType === 'image' ? 'selected' : ''}>Images</option>
-            <option value="video" ${dashboard.assetBrowserState.filterType === 'video' ? 'selected' : ''}>Videos</option>
-            <option value="audio" ${dashboard.assetBrowserState.filterType === 'audio' ? 'selected' : ''}>Audio</option>
-            <option value="document" ${dashboard.assetBrowserState.filterType === 'document' ? 'selected' : ''}>Documents</option>
-          </select>
         </div>
       </div>
 
@@ -108,6 +101,7 @@ export async function renderAssets(dashboard) {
         <div class="asset-preview-panel">
           <div class="asset-preview-header">
             <span>Preview</span>
+            ${createThemeSelectorsHTML()}
           </div>
           <div id="asset-preview-content">
             ${renderAssetPreview(dashboard.assetBrowserState.selectedFile, dashboard)}
@@ -126,6 +120,10 @@ export async function renderAssets(dashboard) {
   // Attach event listeners
   attachAssetBrowserListeners(dashboard);
   attachAssetManagementListeners(dashboard);
+
+  // Initialize theme system and attach theme selector handlers
+  initializeThemes();
+  attachThemeSelectorHandlers();
 }
 
 /**
@@ -721,7 +719,7 @@ function showCreateFolderModal(dashboard) {
  */
 async function createFolder(parentPath, folderName, dashboard) {
   if (!folderName || !folderName.trim()) {
-    console.error('Please enter a folder name');
+    showNotification('Please enter a folder name', 'error', escapeHtml);
     return;
   }
 
@@ -741,12 +739,14 @@ async function createFolder(parentPath, folderName, dashboard) {
       closeModal('create-folder-modal');
       const fullPath = 'assets' + (parentPath ? '/' + parentPath : '');
       dashboard.assetBrowserState.expandedFolders.add(fullPath);
+      showNotification(`Folder "${folderName.trim()}" created`, 'success', escapeHtml);
       renderAssets(dashboard);
     } else {
-      console.error('Error:', result.error);
+      showNotification(result.error || 'Failed to create folder', 'error', escapeHtml);
     }
   } catch (error) {
     console.error('Create folder error:', error);
+    showNotification('Failed to create folder: ' + error.message, 'error', escapeHtml);
   }
 }
 

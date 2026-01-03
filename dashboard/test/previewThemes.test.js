@@ -3,7 +3,7 @@
  * Tests for markdown preview theming functionality
  */
 
-import { describe, test, beforeEach, afterEach, mock } from 'node:test';
+import { describe, test, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
 import { JSDOM } from 'jsdom';
 
@@ -280,11 +280,9 @@ describe('Preview Themes', async () => {
   describe('CSS Layer Structure', async () => {
 
     test('layer order string is correctly formatted', () => {
-      // The expected layer order for proper CSS cascade
-      const expectedOrder = '@layer preview-defaults, preview-theme, syntax-theme;';
-
       // This tests the structure that applyPreviewIsolation creates
       // We verify the concept rather than the implementation
+      // Expected: '@layer preview-defaults, preview-theme, syntax-theme;'
       const layers = ['preview-defaults', 'preview-theme', 'syntax-theme'];
 
       // preview-defaults should come first (lowest priority)

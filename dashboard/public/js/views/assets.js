@@ -36,7 +36,7 @@ export async function renderAssets(dashboard) {
   dashboard._assetTreeData = result.data;
 
   content.innerHTML = `
-    <div class="view">
+    <div class="view view-full-height">
       <div class="asset-browser-toolbar">
         <div class="toolbar-left">
           <button class="toolbar-btn primary" id="upload-btn">
@@ -47,27 +47,24 @@ export async function renderAssets(dashboard) {
             <span class="btn-icon">+</span>
             New Folder
           </button>
+          <div class="toolbar-search">
+            <input type="text" class="search-input" id="asset-search" placeholder="Search files..." value="${escapeHtml(dashboard.assetBrowserState.searchQuery)}">
+          </div>
+          <div class="filter-group">
+            <label class="filter-label">Type:</label>
+            <select class="filter-select" id="asset-type-filter">
+              <option value="all" ${dashboard.assetBrowserState.filterType === 'all' ? 'selected' : ''}>All Files</option>
+              <option value="image" ${dashboard.assetBrowserState.filterType === 'image' ? 'selected' : ''}>Images</option>
+              <option value="video" ${dashboard.assetBrowserState.filterType === 'video' ? 'selected' : ''}>Videos</option>
+              <option value="audio" ${dashboard.assetBrowserState.filterType === 'audio' ? 'selected' : ''}>Audio</option>
+              <option value="document" ${dashboard.assetBrowserState.filterType === 'document' ? 'selected' : ''}>Documents</option>
+            </select>
+          </div>
         </div>
         <div class="toolbar-right">
           <span class="current-folder-path" id="current-folder-path">
             ${escapeHtml(dashboard.assetBrowserState.selectedFolder || 'assets')}
           </span>
-        </div>
-      </div>
-
-      <div class="asset-browser-controls">
-        <div class="search-box">
-          <input type="text" class="search-input" id="asset-search" placeholder="Search files..." value="${escapeHtml(dashboard.assetBrowserState.searchQuery)}">
-        </div>
-        <div class="filter-group">
-          <label class="filter-label">Type:</label>
-          <select class="filter-select" id="asset-type-filter">
-            <option value="all" ${dashboard.assetBrowserState.filterType === 'all' ? 'selected' : ''}>All Files</option>
-            <option value="image" ${dashboard.assetBrowserState.filterType === 'image' ? 'selected' : ''}>Images</option>
-            <option value="video" ${dashboard.assetBrowserState.filterType === 'video' ? 'selected' : ''}>Videos</option>
-            <option value="audio" ${dashboard.assetBrowserState.filterType === 'audio' ? 'selected' : ''}>Audio</option>
-            <option value="document" ${dashboard.assetBrowserState.filterType === 'document' ? 'selected' : ''}>Documents</option>
-          </select>
         </div>
       </div>
 

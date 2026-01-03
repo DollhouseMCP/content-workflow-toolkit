@@ -61,7 +61,7 @@ export async function renderCalendar(dashboard) {
   const filteredItems = filterReleaseItems(releaseItems, dashboard.calendarState.filter);
 
   content.innerHTML = `
-    <div class="view">
+    <div class="view view-full-height">
       ${releaseQueueWarning}
 
       <div class="calendar-controls">
@@ -78,7 +78,7 @@ export async function renderCalendar(dashboard) {
         </div>
       </div>
 
-      <div id="calendar-content">
+      <div id="calendar-content" class="calendar-content-wrapper">
         ${dashboard.calendarState.viewMode === 'calendar'
     ? renderCalendarView(filteredItems, releaseGroups, dashboard.calendarState)
     : renderListView(filteredItems, releaseGroups)}

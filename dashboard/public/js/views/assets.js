@@ -145,7 +145,8 @@ function renderAssetTree(node, level, parentPath, state) {
       <div class="asset-tree-item asset-tree-file ${isSelected ? 'selected' : ''}"
            style="padding-left: ${(level + 1) * 1.5}rem;"
            data-file-path="${escapeHtml(node.path)}"
-           data-file-data='${JSON.stringify(node).replace(/'/g, '&#39;')}'>
+           data-file-data='${JSON.stringify(node).replace(/'/g, '&#39;')}'
+           tabindex="0">
         <div class="asset-tree-item-content">
           <span class="asset-file-icon">${getFileIcon(node)}</span>
           <span class="asset-tree-name">${escapeHtml(node.name)}</span>
@@ -359,6 +360,40 @@ function updateAssetTreeOnly(dashboard) {
 }
 
 /**
+ * Select a file by its DOM element and update preview
+ * Used for keyboard navigation to avoid full re-render
+ * @param {HTMLElement} fileElement - The file DOM element to select
+ * @param {object} dashboard - Dashboard instance
+ */
+function selectFileByElement(fileElement, dashboard) {
+  if (!fileElement || !fileElement.dataset.fileData) return;
+
+  // Parse file data and update state
+  const fileData = JSON.parse(fileElement.dataset.fileData);
+  dashboard.assetBrowserState.selectedFile = fileData;
+
+  // Update visual selection (remove from previous, add to current)
+  const previousSelected = document.querySelector('.asset-tree-file.selected');
+  if (previousSelected) {
+    previousSelected.classList.remove('selected');
+  }
+  fileElement.classList.add('selected');
+
+  // Update preview content
+  const previewContent = document.getElementById('asset-preview-content');
+  if (previewContent) {
+    previewContent.innerHTML = renderAssetPreview(fileData, dashboard);
+    // Re-initialize themes if needed for markdown preview
+    if (fileData.ext === '.md') {
+      import('../previewThemes.js').then(({ initializeThemes, attachThemeSelectorHandlers }) => {
+        initializeThemes();
+        attachThemeSelectorHandlers();
+      });
+    }
+  }
+}
+
+/**
  * Attach asset browser event listeners
  */
 function attachAssetBrowserListeners(dashboard) {
@@ -374,6 +409,9 @@ function attachAssetBrowserListeners(dashboard) {
   }
   if (dashboard._assetChangeHandler) {
     content.removeEventListener('change', dashboard._assetChangeHandler);
+  }
+  if (dashboard._assetKeydownHandler) {
+    content.removeEventListener('keydown', dashboard._assetKeydownHandler);
   }
   // Clear debounce timer to prevent stale updates
   if (dashboard._searchDebounceTimer) {
@@ -468,9 +506,65 @@ function attachAssetBrowserListeners(dashboard) {
     }
   };
 
+  // Create keyboard handler for navigation
+  dashboard._assetKeydownHandler = (e) => {
+    const target = e.target;
+
+    // Enter in search bar: focus first visible file
+    if (target.id === 'asset-search' && e.key === 'Enter') {
+      e.preventDefault();
+      const firstFile = document.querySelector('.asset-tree-file');
+      if (firstFile) {
+        selectFileByElement(firstFile, dashboard);
+        firstFile.focus();
+      }
+      return;
+    }
+
+    // Arrow navigation when a file item is focused
+    if (target.classList.contains('asset-tree-file')) {
+      const allFiles = Array.from(document.querySelectorAll('.asset-tree-file'));
+      const currentIndex = allFiles.indexOf(target);
+
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        const nextIndex = currentIndex + 1;
+        if (nextIndex < allFiles.length) {
+          selectFileByElement(allFiles[nextIndex], dashboard);
+          allFiles[nextIndex].focus();
+        }
+        return;
+      }
+
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        const prevIndex = currentIndex - 1;
+        if (prevIndex >= 0) {
+          selectFileByElement(allFiles[prevIndex], dashboard);
+          allFiles[prevIndex].focus();
+        } else {
+          // Go back to search input if at top
+          const searchInput = document.getElementById('asset-search');
+          if (searchInput) {
+            searchInput.focus();
+          }
+        }
+        return;
+      }
+
+      // Enter/Space on file item: already selected, could open/download
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        selectFileByElement(target, dashboard);
+        return;
+      }
+    }
+  };
+
   content.addEventListener('click', dashboard._assetClickHandler);
   content.addEventListener('input', dashboard._assetInputHandler);
   content.addEventListener('change', dashboard._assetChangeHandler);
+  content.addEventListener('keydown', dashboard._assetKeydownHandler);
 }
 
 /**

@@ -1086,6 +1086,15 @@ footer {
     border-left: 3px solid var(--primary-color);
 }
 
+.asset-tree-item:focus {
+    outline: 2px solid var(--primary-color);
+    outline-offset: -2px;
+}
+
+.asset-tree-item:focus.selected {
+    outline-offset: 1px;
+}
+
 .asset-tree-item-content {
     display: flex;
     align-items: center;

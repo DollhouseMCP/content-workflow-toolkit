@@ -6,6 +6,7 @@
 import { describe, test, beforeEach } from 'node:test';
 import assert from 'node:assert';
 import { JSDOM } from 'jsdom';
+import { matchesAssetFilter, hasMatchingFilesInDir } from '../public/js/utils/assetFilters.js';
 
 describe('Frontend Tests', async () => {
 
@@ -104,19 +105,13 @@ describe('Frontend Tests', async () => {
     });
   });
 
-  describe('Asset Tree Filtering Logic', async () => {
-    // Test the filtering logic that runs when search changes
+  describe('Asset Filter Functions (matchesAssetFilter)', async () => {
 
     test('empty search query matches all files', () => {
       const state = { searchQuery: '', filterType: 'all' };
       const file = { name: 'image.png', ext: '.png' };
 
-      // Simulate matchesAssetFilter logic
-      const matchesSearch = !state.searchQuery ||
-        file.name.toLowerCase().includes(state.searchQuery.toLowerCase());
-      const matchesType = state.filterType === 'all';
-
-      assert.ok(matchesSearch && matchesType, 'Empty query should match all');
+      assert.ok(matchesAssetFilter(file, state), 'Empty query should match all');
     });
 
     test('search query filters files by name', () => {
@@ -125,27 +120,165 @@ describe('Frontend Tests', async () => {
       const file1 = { name: 'image.png', ext: '.png' };
       const file2 = { name: 'video.mp4', ext: '.mp4' };
 
-      const matches1 = file1.name.toLowerCase().includes(state.searchQuery.toLowerCase());
-      const matches2 = file2.name.toLowerCase().includes(state.searchQuery.toLowerCase());
-
-      assert.ok(matches1, 'image.png should match "image" query');
-      assert.ok(!matches2, 'video.mp4 should not match "image" query');
+      assert.ok(matchesAssetFilter(file1, state), 'image.png should match "image" query');
+      assert.ok(!matchesAssetFilter(file2, state), 'video.mp4 should not match "image" query');
     });
 
     test('search is case-insensitive', () => {
       const state = { searchQuery: 'IMAGE', filterType: 'all' };
       const file = { name: 'image.png', ext: '.png' };
 
-      const matches = file.name.toLowerCase().includes(state.searchQuery.toLowerCase());
-      assert.ok(matches, 'Search should be case-insensitive');
+      assert.ok(matchesAssetFilter(file, state), 'Search should be case-insensitive');
     });
 
     test('partial matches work', () => {
       const state = { searchQuery: 'mag', filterType: 'all' };
       const file = { name: 'image.png', ext: '.png' };
 
-      const matches = file.name.toLowerCase().includes(state.searchQuery.toLowerCase());
-      assert.ok(matches, 'Partial match "mag" should match "image.png"');
+      assert.ok(matchesAssetFilter(file, state), 'Partial match "mag" should match "image.png"');
+    });
+
+    test('type filter: image files', () => {
+      const state = { searchQuery: '', filterType: 'image' };
+
+      assert.ok(matchesAssetFilter({ name: 'photo.png', ext: '.png' }, state));
+      assert.ok(matchesAssetFilter({ name: 'photo.jpg', ext: '.jpg' }, state));
+      assert.ok(matchesAssetFilter({ name: 'photo.jpeg', ext: '.jpeg' }, state));
+      assert.ok(matchesAssetFilter({ name: 'photo.gif', ext: '.gif' }, state));
+      assert.ok(matchesAssetFilter({ name: 'photo.webp', ext: '.webp' }, state));
+      assert.ok(matchesAssetFilter({ name: 'photo.svg', ext: '.svg' }, state));
+      assert.ok(!matchesAssetFilter({ name: 'video.mp4', ext: '.mp4' }, state));
+      assert.ok(!matchesAssetFilter({ name: 'doc.txt', ext: '.txt' }, state));
+    });
+
+    test('type filter: video files', () => {
+      const state = { searchQuery: '', filterType: 'video' };
+
+      assert.ok(matchesAssetFilter({ name: 'clip.mp4', ext: '.mp4' }, state));
+      assert.ok(matchesAssetFilter({ name: 'clip.mov', ext: '.mov' }, state));
+      assert.ok(matchesAssetFilter({ name: 'clip.webm', ext: '.webm' }, state));
+      assert.ok(matchesAssetFilter({ name: 'clip.avi', ext: '.avi' }, state));
+      assert.ok(!matchesAssetFilter({ name: 'photo.png', ext: '.png' }, state));
+    });
+
+    test('type filter: audio files', () => {
+      const state = { searchQuery: '', filterType: 'audio' };
+
+      assert.ok(matchesAssetFilter({ name: 'song.mp3', ext: '.mp3' }, state));
+      assert.ok(matchesAssetFilter({ name: 'song.wav', ext: '.wav' }, state));
+      assert.ok(matchesAssetFilter({ name: 'song.m4a', ext: '.m4a' }, state));
+      assert.ok(matchesAssetFilter({ name: 'song.aac', ext: '.aac' }, state));
+      assert.ok(matchesAssetFilter({ name: 'song.ogg', ext: '.ogg' }, state));
+      assert.ok(!matchesAssetFilter({ name: 'video.mp4', ext: '.mp4' }, state));
+    });
+
+    test('type filter: document files', () => {
+      const state = { searchQuery: '', filterType: 'document' };
+
+      assert.ok(matchesAssetFilter({ name: 'readme.md', ext: '.md' }, state));
+      assert.ok(matchesAssetFilter({ name: 'notes.txt', ext: '.txt' }, state));
+      assert.ok(matchesAssetFilter({ name: 'manual.pdf', ext: '.pdf' }, state));
+      assert.ok(matchesAssetFilter({ name: 'report.doc', ext: '.doc' }, state));
+      assert.ok(matchesAssetFilter({ name: 'report.docx', ext: '.docx' }, state));
+      assert.ok(!matchesAssetFilter({ name: 'photo.png', ext: '.png' }, state));
+    });
+
+    test('combined search and type filter', () => {
+      const state = { searchQuery: 'thumb', filterType: 'image' };
+
+      assert.ok(matchesAssetFilter({ name: 'thumbnail.png', ext: '.png' }, state));
+      assert.ok(!matchesAssetFilter({ name: 'thumbnail.mp4', ext: '.mp4' }, state)); // wrong type
+      assert.ok(!matchesAssetFilter({ name: 'photo.png', ext: '.png' }, state)); // wrong name
+    });
+  });
+
+  describe('Directory Filter Functions (hasMatchingFilesInDir)', async () => {
+
+    test('file node returns matchesAssetFilter result', () => {
+      const state = { searchQuery: 'image', filterType: 'all' };
+
+      const matchingFile = { type: 'file', name: 'image.png', ext: '.png' };
+      const nonMatchingFile = { type: 'file', name: 'video.mp4', ext: '.mp4' };
+
+      assert.ok(hasMatchingFilesInDir(matchingFile, state));
+      assert.ok(!hasMatchingFilesInDir(nonMatchingFile, state));
+    });
+
+    test('empty directory returns false', () => {
+      const state = { searchQuery: '', filterType: 'all' };
+      const emptyDir = { type: 'directory', name: 'empty', children: [] };
+
+      assert.ok(!hasMatchingFilesInDir(emptyDir, state));
+    });
+
+    test('directory with matching file returns true', () => {
+      const state = { searchQuery: 'image', filterType: 'all' };
+      const dir = {
+        type: 'directory',
+        name: 'assets',
+        children: [
+          { type: 'file', name: 'image.png', ext: '.png' }
+        ]
+      };
+
+      assert.ok(hasMatchingFilesInDir(dir, state));
+    });
+
+    test('directory with no matching files returns false', () => {
+      const state = { searchQuery: 'image', filterType: 'all' };
+      const dir = {
+        type: 'directory',
+        name: 'assets',
+        children: [
+          { type: 'file', name: 'video.mp4', ext: '.mp4' }
+        ]
+      };
+
+      assert.ok(!hasMatchingFilesInDir(dir, state));
+    });
+
+    test('nested directory with matching file returns true', () => {
+      const state = { searchQuery: 'image', filterType: 'all' };
+      const dir = {
+        type: 'directory',
+        name: 'assets',
+        children: [
+          {
+            type: 'directory',
+            name: 'subdir',
+            children: [
+              { type: 'file', name: 'image.png', ext: '.png' }
+            ]
+          }
+        ]
+      };
+
+      assert.ok(hasMatchingFilesInDir(dir, state));
+    });
+
+    test('deeply nested structure works correctly', () => {
+      const state = { searchQuery: 'deep', filterType: 'all' };
+      const dir = {
+        type: 'directory',
+        name: 'level1',
+        children: [
+          {
+            type: 'directory',
+            name: 'level2',
+            children: [
+              {
+                type: 'directory',
+                name: 'level3',
+                children: [
+                  { type: 'file', name: 'deep-file.txt', ext: '.txt' }
+                ]
+              }
+            ]
+          }
+        ]
+      };
+
+      assert.ok(hasMatchingFilesInDir(dir, state));
     });
   });
 });

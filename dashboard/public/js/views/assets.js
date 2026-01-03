@@ -3,6 +3,7 @@
 import { DASHBOARD_CONFIG } from '../config.js';
 import { escapeHtml, formatFileSize, formatFileDate, getFileIcon } from '../utils.js';
 import { showModal, closeModal } from '../modal.js';
+import { matchesAssetFilter, hasMatchingFilesInDir } from '../utils/assetFilters.js';
 
 /**
  * Render the asset browser view
@@ -184,54 +185,6 @@ function renderAssetTree(node, level, parentPath, state) {
   `;
 }
 
-/**
- * Check if file matches current filter
- */
-function matchesAssetFilter(file, state) {
-  // Search filter
-  if (state.searchQuery) {
-    const query = state.searchQuery.toLowerCase();
-    if (!file.name.toLowerCase().includes(query)) {
-      return false;
-    }
-  }
-
-  // Type filter
-  if (state.filterType !== 'all') {
-    const ext = file.ext;
-    switch (state.filterType) {
-    case 'image':
-      if (!['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg'].includes(ext)) return false;
-      break;
-    case 'video':
-      if (!['.mp4', '.mov', '.webm', '.avi'].includes(ext)) return false;
-      break;
-    case 'audio':
-      if (!['.mp3', '.wav', '.m4a', '.aac', '.ogg'].includes(ext)) return false;
-      break;
-    case 'document':
-      if (!['.md', '.txt', '.pdf', '.doc', '.docx'].includes(ext)) return false;
-      break;
-    }
-  }
-
-  return true;
-}
-
-/**
- * Check if directory has matching files
- */
-function hasMatchingFilesInDir(node, state) {
-  if (node.type === 'file') {
-    return matchesAssetFilter(node, state);
-  }
-
-  if (node.children && node.children.length > 0) {
-    return node.children.some(child => hasMatchingFilesInDir(child, state));
-  }
-
-  return false;
-}
 
 /**
  * Render asset preview

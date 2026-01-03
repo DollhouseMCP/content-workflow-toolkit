@@ -368,8 +368,18 @@ function updateAssetTreeOnly(dashboard) {
 function selectFileByElement(fileElement, dashboard) {
   if (!fileElement || !fileElement.dataset.fileData) return;
 
-  // Parse file data and update state
-  const fileData = JSON.parse(fileElement.dataset.fileData);
+  // Parse file data with error handling to prevent XSS via malformed JSON
+  let fileData;
+  try {
+    fileData = JSON.parse(fileElement.dataset.fileData);
+    if (!fileData || typeof fileData !== 'object' || !fileData.path) {
+      console.error('Invalid file data structure');
+      return;
+    }
+  } catch (e) {
+    console.error('Failed to parse file data:', e);
+    return;
+  }
   dashboard.assetBrowserState.selectedFile = fileData;
 
   // Update visual selection (remove from previous, add to current)
@@ -384,13 +394,56 @@ function selectFileByElement(fileElement, dashboard) {
   if (previewContent) {
     previewContent.innerHTML = renderAssetPreview(fileData, dashboard);
     // Re-initialize themes if needed for markdown preview
+    // Uses already-imported module to avoid race conditions from async imports
     if (fileData.ext === '.md') {
-      import('../previewThemes.js').then(({ initializeThemes, attachThemeSelectorHandlers }) => {
-        initializeThemes();
-        attachThemeSelectorHandlers();
-      });
+      initializeThemes();
+      attachThemeSelectorHandlers();
     }
   }
+}
+
+/**
+ * Find the next visible file element in the tree using DOM traversal
+ * More performant than querySelectorAll on every keystroke
+ * @param {HTMLElement} currentElement - Current file element
+ * @returns {HTMLElement|null} - Next file element or null if at end
+ */
+function findNextFileElement(currentElement) {
+  // Get the asset tree container
+  const assetTree = document.getElementById('asset-tree');
+  if (!assetTree) return null;
+
+  // Get all file elements and find the next one
+  const allFiles = assetTree.querySelectorAll('.asset-tree-file');
+  const fileArray = Array.from(allFiles);
+  const currentIndex = fileArray.indexOf(currentElement);
+
+  if (currentIndex >= 0 && currentIndex < fileArray.length - 1) {
+    return fileArray[currentIndex + 1];
+  }
+  return null;
+}
+
+/**
+ * Find the previous visible file element in the tree using DOM traversal
+ * More performant than querySelectorAll on every keystroke
+ * @param {HTMLElement} currentElement - Current file element
+ * @returns {HTMLElement|null} - Previous file element or null if at start
+ */
+function findPreviousFileElement(currentElement) {
+  // Get the asset tree container
+  const assetTree = document.getElementById('asset-tree');
+  if (!assetTree) return null;
+
+  // Get all file elements and find the previous one
+  const allFiles = assetTree.querySelectorAll('.asset-tree-file');
+  const fileArray = Array.from(allFiles);
+  const currentIndex = fileArray.indexOf(currentElement);
+
+  if (currentIndex > 0) {
+    return fileArray[currentIndex - 1];
+  }
+  return null;
 }
 
 /**
@@ -447,7 +500,17 @@ function attachAssetBrowserListeners(dashboard) {
     const fileItem = target.closest('.asset-tree-file');
     if (fileItem) {
       e.stopPropagation();
-      const fileData = JSON.parse(fileItem.dataset.fileData);
+      let fileData;
+      try {
+        fileData = JSON.parse(fileItem.dataset.fileData);
+        if (!fileData || typeof fileData !== 'object' || !fileData.path) {
+          console.error('Invalid file data structure');
+          return;
+        }
+      } catch (err) {
+        console.error('Failed to parse file data:', err);
+        return;
+      }
       dashboard.assetBrowserState.selectedFile = fileData;
       renderAssets(dashboard);
       return;
@@ -523,29 +586,38 @@ function attachAssetBrowserListeners(dashboard) {
 
     // Arrow navigation when a file item is focused
     if (target.classList.contains('asset-tree-file')) {
-      const allFiles = Array.from(document.querySelectorAll('.asset-tree-file'));
-      const currentIndex = allFiles.indexOf(target);
-
       if (e.key === 'ArrowDown') {
         e.preventDefault();
-        const nextIndex = currentIndex + 1;
-        if (nextIndex < allFiles.length) {
-          selectFileByElement(allFiles[nextIndex], dashboard);
-          allFiles[nextIndex].focus();
+        // Use DOM traversal for performance - find next sibling file element
+        const nextFile = findNextFileElement(target);
+        if (nextFile) {
+          selectFileByElement(nextFile, dashboard);
+          nextFile.focus();
         }
         return;
       }
 
       if (e.key === 'ArrowUp') {
         e.preventDefault();
-        const prevIndex = currentIndex - 1;
-        if (prevIndex >= 0) {
-          selectFileByElement(allFiles[prevIndex], dashboard);
-          allFiles[prevIndex].focus();
+        // Use DOM traversal for performance - find previous sibling file element
+        const prevFile = findPreviousFileElement(target);
+        if (prevFile) {
+          selectFileByElement(prevFile, dashboard);
+          prevFile.focus();
         } else {
-          // Go back to search input if at top
+          // Go back to search input if at top - clear visual selection
           const searchInput = document.getElementById('asset-search');
           if (searchInput) {
+            const currentSelected = document.querySelector('.asset-tree-file.selected');
+            if (currentSelected) {
+              currentSelected.classList.remove('selected');
+            }
+            dashboard.assetBrowserState.selectedFile = null;
+            // Clear preview when returning to search
+            const previewContent = document.getElementById('asset-preview-content');
+            if (previewContent) {
+              previewContent.innerHTML = renderAssetPreview(null, dashboard);
+            }
             searchInput.focus();
           }
         }

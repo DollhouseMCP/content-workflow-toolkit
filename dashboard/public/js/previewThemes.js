@@ -1,5 +1,6 @@
 // Preview Theme Configuration
 // Styles for Markdown preview, Code blocks, and Mermaid diagrams
+// Uses CSS isolation techniques from Merview to prevent style bleeding
 
 /**
  * Available preview styles (markdown document styles)
@@ -72,12 +73,108 @@ export function getSavedMermaidTheme() {
 }
 
 /**
- * Load preview style CSS
+ * Apply base isolation styles to prevent dashboard styles from bleeding into preview
+ * This creates a CSS reset boundary for the preview pane
  */
-export function loadPreviewStyle(styleFile) {
-  const existingLink = document.getElementById('preview-style-css');
-  if (existingLink) {
-    existingLink.remove();
+function applyPreviewIsolation() {
+  let isolationStyle = document.getElementById('preview-isolation');
+  if (isolationStyle) return; // Already applied
+
+  isolationStyle = document.createElement('style');
+  isolationStyle.id = 'preview-isolation';
+  isolationStyle.textContent = `
+    /* CSS Cascade Layers for proper style isolation */
+    @layer dashboard-base, preview-reset, preview-styles, syntax-theme;
+
+    /* Reset preview pane to prevent dashboard style bleeding */
+    @layer preview-reset {
+      .markdown-preview {
+        all: initial;
+        display: block;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+        font-size: 16px;
+        line-height: 1.6;
+        color: #333;
+        background: #fff;
+        padding: 20px;
+        overflow-y: auto;
+        box-sizing: border-box;
+        width: 100%;
+        height: 100%;
+      }
+
+      .markdown-preview * {
+        box-sizing: border-box;
+      }
+
+      /* Ensure mermaid diagrams render correctly */
+      .markdown-preview .mermaid {
+        background: transparent;
+        text-align: center;
+        margin: 1em 0;
+      }
+
+      .markdown-preview .mermaid svg {
+        max-width: 100%;
+        height: auto;
+      }
+    }
+  `;
+  document.head.appendChild(isolationStyle);
+}
+
+/**
+ * Apply syntax override - isolate code blocks from preview style contamination
+ * Adapted from Merview's applySyntaxOverride function
+ */
+function applySyntaxOverride() {
+  let syntaxOverride = document.getElementById('syntax-override');
+  if (!syntaxOverride) {
+    syntaxOverride = document.createElement('style');
+    syntaxOverride.id = 'syntax-override';
+    document.head.appendChild(syntaxOverride);
+  }
+
+  // Basic structure for code blocks - prevent preview styles from affecting them
+  syntaxOverride.textContent = `
+    @layer syntax-theme {
+      .markdown-preview pre {
+        margin: 1em 0;
+        padding: 0;
+        background: transparent !important;
+        border: none !important;
+      }
+
+      .markdown-preview pre code.hljs {
+        display: block;
+        padding: 1em;
+        overflow-x: auto;
+        border-radius: 6px;
+        white-space: pre;
+        font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace !important;
+        font-size: 0.9em;
+        line-height: 1.5;
+        tab-size: 4;
+      }
+
+      /* Inline code (not in pre) */
+      .markdown-preview code:not(.hljs):not(pre code) {
+        font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace !important;
+        font-size: 0.9em;
+        padding: 0.2em 0.4em;
+        border-radius: 3px;
+      }
+    }
+  `;
+}
+
+/**
+ * Load preview style CSS with proper layer wrapping
+ */
+export async function loadPreviewStyle(styleFile) {
+  const existingStyle = document.getElementById('preview-style-css');
+  if (existingStyle) {
+    existingStyle.remove();
   }
 
   localStorage.setItem(STORAGE_KEYS.previewStyle, styleFile);
@@ -86,11 +183,33 @@ export function loadPreviewStyle(styleFile) {
     return; // Default style, no CSS to load
   }
 
-  const link = document.createElement('link');
-  link.id = 'preview-style-css';
-  link.rel = 'stylesheet';
-  link.href = `/styles/${styleFile}.css`;
-  document.head.appendChild(link);
+  try {
+    // Fetch the CSS file
+    const response = await fetch(`/styles/${styleFile}.css`);
+    if (!response.ok) {
+      console.warn(`Failed to load preview style: ${styleFile}`);
+      return;
+    }
+
+    const cssText = await response.text();
+
+    // Create style element wrapped in CSS layer
+    const styleElement = document.createElement('style');
+    styleElement.id = 'preview-style-css';
+    styleElement.textContent = `@layer preview-styles { ${cssText} }`;
+    document.head.appendChild(styleElement);
+
+    // Extract and apply background color to preview container
+    const bgMatch = cssText.match(/\.markdown-preview\s*\{[^}]*background:\s*([^;]+)/);
+    if (bgMatch) {
+      const preview = document.querySelector('.markdown-preview');
+      if (preview) {
+        preview.style.background = bgMatch[1].trim();
+      }
+    }
+  } catch (error) {
+    console.warn('Error loading preview style:', error);
+  }
 }
 
 /**
@@ -109,6 +228,9 @@ export function loadSyntaxTheme(themeFile) {
   link.rel = 'stylesheet';
   link.href = `https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/${themeFile}.min.css`;
   document.head.appendChild(link);
+
+  // Reapply syntax override after theme loads
+  link.onload = () => applySyntaxOverride();
 }
 
 /**
@@ -145,9 +267,15 @@ export async function applyMermaidTheme(theme) {
 }
 
 /**
- * Initialize theme system - load saved preferences
+ * Initialize theme system - load saved preferences and apply isolation
  */
 export function initializeThemes() {
+  // Apply isolation styles first
+  applyPreviewIsolation();
+
+  // Apply syntax override
+  applySyntaxOverride();
+
   // Load saved preview style
   const previewStyle = getSavedPreviewStyle();
   loadPreviewStyle(previewStyle);

@@ -269,8 +269,14 @@ main {
     color: var(--error);
 }
 
-/* Code/Pre */
-pre {
+/*
+ * Code/Pre styles for dashboard UI only
+ * Preview pane has its own isolated styles via CSS layers
+ * These selectors specifically target dashboard UI areas, not the preview
+ */
+.modal-content pre,
+.card pre,
+.mermaid-error {
     background-color: var(--background);
     border: 1px solid var(--border);
     border-radius: 4px;
@@ -279,7 +285,9 @@ pre {
     font-size: 0.875rem;
 }
 
-code {
+.modal-content code,
+.card code,
+.asset-file-info code {
     font-family: 'Courier New', monospace;
     color: var(--primary-color);
 }

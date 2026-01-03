@@ -20,7 +20,9 @@ import {
   createEpisode,
   updateEpisodeMetadata,
   getEpisodeDetails,
-  listEpisodes
+  listEpisodes,
+  createSeries,
+  listSeries
 } from './tools/content.js';
 import {
   getReleaseQueueContents,
@@ -35,6 +37,13 @@ import {
   generateDescription,
   generateSocialPosts
 } from './tools/generation.js';
+import {
+  listAssets,
+  getAssetInfo,
+  createAssetFolder,
+  moveAsset,
+  deleteAsset
+} from './tools/assets.js';
 
 // Define the available tools
 const tools: Tool[] = [
@@ -154,6 +163,36 @@ const tools: Tool[] = [
       }
     }
   },
+  {
+    name: 'create_series',
+    description: 'Creates a new series folder with metadata (series.yml) and README. Returns the created series details.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        name: {
+          type: 'string',
+          description: 'The name of the series (e.g., "AI Tools Review", "Tutorial Series")'
+        },
+        description: {
+          type: 'string',
+          description: 'Optional description for the series'
+        },
+        template: {
+          type: 'string',
+          description: 'Optional template type (default, tutorial, vlog, podcast, etc.)'
+        }
+      },
+      required: ['name']
+    }
+  },
+  {
+    name: 'list_series',
+    description: 'Lists all series with their metadata.',
+    inputSchema: {
+      type: 'object',
+      properties: {}
+    }
+  },
 
   // Release Management Tools
   {
@@ -243,10 +282,94 @@ const tools: Tool[] = [
     }
   },
 
-  // Content Generation Tools (stubs)
+  // Asset Management Tools
+  {
+    name: 'list_assets',
+    description: 'Lists assets in the assets directory. Optionally filter by path or type.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        path: {
+          type: 'string',
+          description: 'Optional subdirectory path (e.g., "branding", "music")'
+        },
+        type: {
+          type: 'string',
+          description: 'Optional filter by type (image, video, audio, document)',
+          enum: ['image', 'video', 'audio', 'document']
+        }
+      }
+    }
+  },
+  {
+    name: 'get_asset_info',
+    description: 'Returns detailed information about a specific asset including size, type, and modification date.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        path: {
+          type: 'string',
+          description: 'Path to the asset relative to assets directory'
+        }
+      },
+      required: ['path']
+    }
+  },
+  {
+    name: 'create_asset_folder',
+    description: 'Creates a new folder in the assets directory.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        parent_path: {
+          type: 'string',
+          description: 'Parent folder path (empty string for assets root)'
+        },
+        name: {
+          type: 'string',
+          description: 'Name for the new folder'
+        }
+      },
+      required: ['name']
+    }
+  },
+  {
+    name: 'move_asset',
+    description: 'Moves or renames an asset or folder.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        source: {
+          type: 'string',
+          description: 'Current path of the asset'
+        },
+        destination: {
+          type: 'string',
+          description: 'New path for the asset'
+        }
+      },
+      required: ['source', 'destination']
+    }
+  },
+  {
+    name: 'delete_asset',
+    description: 'Deletes an asset file or empty folder.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        path: {
+          type: 'string',
+          description: 'Path to the asset to delete'
+        }
+      },
+      required: ['path']
+    }
+  },
+
+  // Content Generation Tools
   {
     name: 'generate_description',
-    description: 'Generates an AI description from the episode script.md file (NOT YET IMPLEMENTED)',
+    description: 'Generates a YouTube/video description from the episode script.md file. Extracts key points and timestamps.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -264,7 +387,7 @@ const tools: Tool[] = [
   },
   {
     name: 'generate_social_posts',
-    description: 'Generates AI social media posts for an episode (NOT YET IMPLEMENTED)',
+    description: 'Generates social media posts for an episode. Creates platform-appropriate content for Twitter, LinkedIn, Bluesky, and Threads.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -275,6 +398,11 @@ const tools: Tool[] = [
         episode: {
           type: 'string',
           description: 'The episode folder name'
+        },
+        platforms: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Optional array of platforms to generate for (twitter, linkedin, bluesky, threads). Defaults to all.'
         }
       },
       required: ['series', 'episode']
@@ -348,6 +476,25 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         };
       }
 
+      case 'create_series': {
+        const { name, description, template } = args as {
+          name: string;
+          description?: string;
+          template?: string;
+        };
+        const result = await createSeries(name, description, template);
+        return {
+          content: [{ type: 'text', text: JSON.stringify(result, null, 2) }]
+        };
+      }
+
+      case 'list_series': {
+        const result = await listSeries();
+        return {
+          content: [{ type: 'text', text: JSON.stringify(result, null, 2) }]
+        };
+      }
+
       // Release Management
       case 'get_release_queue': {
         const result = await getReleaseQueueContents();
@@ -397,6 +544,47 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         };
       }
 
+      // Asset Management
+      case 'list_assets': {
+        const { path: assetPath, type } = args as { path?: string; type?: string };
+        const result = await listAssets(assetPath, type);
+        return {
+          content: [{ type: 'text', text: JSON.stringify(result, null, 2) }]
+        };
+      }
+
+      case 'get_asset_info': {
+        const { path: assetPath } = args as { path: string };
+        const result = await getAssetInfo(assetPath);
+        return {
+          content: [{ type: 'text', text: JSON.stringify(result, null, 2) }]
+        };
+      }
+
+      case 'create_asset_folder': {
+        const { parent_path, name } = args as { parent_path?: string; name: string };
+        const result = await createAssetFolder(parent_path || '', name);
+        return {
+          content: [{ type: 'text', text: JSON.stringify(result, null, 2) }]
+        };
+      }
+
+      case 'move_asset': {
+        const { source, destination } = args as { source: string; destination: string };
+        const result = await moveAsset(source, destination);
+        return {
+          content: [{ type: 'text', text: JSON.stringify(result, null, 2) }]
+        };
+      }
+
+      case 'delete_asset': {
+        const { path: assetPath } = args as { path: string };
+        const result = await deleteAsset(assetPath);
+        return {
+          content: [{ type: 'text', text: JSON.stringify(result, null, 2) }]
+        };
+      }
+
       // Content Generation (stubs)
       case 'generate_description': {
         const { series, episode } = args as { series: string; episode: string };
@@ -407,8 +595,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case 'generate_social_posts': {
-        const { series, episode } = args as { series: string; episode: string };
-        const result = await generateSocialPosts(series, episode);
+        const { series, episode, platforms } = args as {
+          series: string;
+          episode: string;
+          platforms?: string[];
+        };
+        const result = await generateSocialPosts(series, episode, platforms);
         return {
           content: [{ type: 'text', text: JSON.stringify(result, null, 2) }]
         };

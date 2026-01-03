@@ -132,9 +132,6 @@ You: Generate social posts for the intro episode
 Claude: I'll generate platform-specific posts...
 [Uses generate_social_posts tool]
 
-Twitter (280 chars):
-New video: Introduction to Content Workflow...
-
 LinkedIn:
 Just published: "Introduction to Content Workflow"
 Key takeaways:
@@ -142,7 +139,12 @@ Key takeaways:
 - Track workflow progress
 - Automate repetitive tasks
 
-Bluesky & Threads posts also generated.
+Bluesky (300 chars):
+New: Introduction to Content Workflow...
+
+Threads:
+new video just dropped 🎬
+Introduction to Content Workflow
 ```
 
 ### Managing Releases

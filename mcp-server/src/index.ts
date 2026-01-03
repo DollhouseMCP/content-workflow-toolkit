@@ -37,6 +37,13 @@ import {
   generateDescription,
   generateSocialPosts
 } from './tools/generation.js';
+import {
+  listAssets,
+  getAssetInfo,
+  createAssetFolder,
+  moveAsset,
+  deleteAsset
+} from './tools/assets.js';
 
 // Define the available tools
 const tools: Tool[] = [
@@ -275,6 +282,90 @@ const tools: Tool[] = [
     }
   },
 
+  // Asset Management Tools
+  {
+    name: 'list_assets',
+    description: 'Lists assets in the assets directory. Optionally filter by path or type.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        path: {
+          type: 'string',
+          description: 'Optional subdirectory path (e.g., "branding", "music")'
+        },
+        type: {
+          type: 'string',
+          description: 'Optional filter by type (image, video, audio, document)',
+          enum: ['image', 'video', 'audio', 'document']
+        }
+      }
+    }
+  },
+  {
+    name: 'get_asset_info',
+    description: 'Returns detailed information about a specific asset including size, type, and modification date.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        path: {
+          type: 'string',
+          description: 'Path to the asset relative to assets directory'
+        }
+      },
+      required: ['path']
+    }
+  },
+  {
+    name: 'create_asset_folder',
+    description: 'Creates a new folder in the assets directory.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        parent_path: {
+          type: 'string',
+          description: 'Parent folder path (empty string for assets root)'
+        },
+        name: {
+          type: 'string',
+          description: 'Name for the new folder'
+        }
+      },
+      required: ['name']
+    }
+  },
+  {
+    name: 'move_asset',
+    description: 'Moves or renames an asset or folder.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        source: {
+          type: 'string',
+          description: 'Current path of the asset'
+        },
+        destination: {
+          type: 'string',
+          description: 'New path for the asset'
+        }
+      },
+      required: ['source', 'destination']
+    }
+  },
+  {
+    name: 'delete_asset',
+    description: 'Deletes an asset file or empty folder.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        path: {
+          type: 'string',
+          description: 'Path to the asset to delete'
+        }
+      },
+      required: ['path']
+    }
+  },
+
   // Content Generation Tools (stubs)
   {
     name: 'generate_description',
@@ -443,6 +534,47 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       case 'get_pipeline_status': {
         const result = await getPipelineStatus();
+        return {
+          content: [{ type: 'text', text: JSON.stringify(result, null, 2) }]
+        };
+      }
+
+      // Asset Management
+      case 'list_assets': {
+        const { path: assetPath, type } = args as { path?: string; type?: string };
+        const result = await listAssets(assetPath, type);
+        return {
+          content: [{ type: 'text', text: JSON.stringify(result, null, 2) }]
+        };
+      }
+
+      case 'get_asset_info': {
+        const { path: assetPath } = args as { path: string };
+        const result = await getAssetInfo(assetPath);
+        return {
+          content: [{ type: 'text', text: JSON.stringify(result, null, 2) }]
+        };
+      }
+
+      case 'create_asset_folder': {
+        const { parent_path, name } = args as { parent_path?: string; name: string };
+        const result = await createAssetFolder(parent_path || '', name);
+        return {
+          content: [{ type: 'text', text: JSON.stringify(result, null, 2) }]
+        };
+      }
+
+      case 'move_asset': {
+        const { source, destination } = args as { source: string; destination: string };
+        const result = await moveAsset(source, destination);
+        return {
+          content: [{ type: 'text', text: JSON.stringify(result, null, 2) }]
+        };
+      }
+
+      case 'delete_asset': {
+        const { path: assetPath } = args as { path: string };
+        const result = await deleteAsset(assetPath);
         return {
           content: [{ type: 'text', text: JSON.stringify(result, null, 2) }]
         };

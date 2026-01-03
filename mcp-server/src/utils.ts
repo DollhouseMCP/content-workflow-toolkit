@@ -13,6 +13,7 @@ const __dirname = path.dirname(__filename);
 // Base paths - resolved relative to mcp-server directory (up one level to project root)
 export const BASE_DIR = path.resolve(__dirname, '../..');
 export const SERIES_DIR = path.join(BASE_DIR, 'series');
+export const ASSETS_DIR = path.join(BASE_DIR, 'assets');
 export const TEMPLATES_DIR = path.join(BASE_DIR, 'templates');
 export const RELEASE_QUEUE_PATH = path.join(BASE_DIR, 'release-queue.yml');
 

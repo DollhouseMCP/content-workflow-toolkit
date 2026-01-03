@@ -307,3 +307,200 @@ export async function listEpisodes(
     };
   }
 }
+
+/**
+ * Series metadata structure
+ */
+interface SeriesMetadata {
+  name: string;
+  slug: string;
+  description: string;
+  created: string;
+  template?: string;
+  settings?: {
+    default_distribution_profile?: string;
+    default_format?: string;
+  };
+}
+
+/**
+ * Series info returned from createSeries
+ */
+interface SeriesInfo {
+  name: string;
+  slug: string;
+  path: string;
+  metadata: SeriesMetadata;
+}
+
+/**
+ * Create a new series folder with metadata
+ */
+export async function createSeries(
+  name: string,
+  description?: string,
+  template?: string
+): Promise<{ success: boolean; series?: SeriesInfo; error?: string }> {
+  let seriesPath: string | null = null;
+  let seriesCreated = false;
+
+  try {
+    // Validate series name
+    const seriesName = name.trim();
+    if (!seriesName) {
+      return { success: false, error: 'Series name is required' };
+    }
+
+    if (!isValidSeriesName(seriesName)) {
+      return {
+        success: false,
+        error: 'Invalid series name. Use only letters, numbers, spaces, hyphens, and underscores.'
+      };
+    }
+
+    // Create slug from name for folder
+    const seriesSlug = slugify(seriesName);
+    if (!seriesSlug) {
+      return { success: false, error: 'Could not create valid folder name from series name' };
+    }
+
+    // Build path
+    seriesPath = path.join(SERIES_DIR, seriesSlug);
+
+    // Verify path is within series directory
+    const resolvedPath = path.resolve(seriesPath);
+    const resolvedSeriesDir = path.resolve(SERIES_DIR) + path.sep;
+    if (!resolvedPath.startsWith(resolvedSeriesDir)) {
+      return { success: false, error: 'Invalid path detected' };
+    }
+
+    // Check if series already exists
+    try {
+      await fs.access(seriesPath);
+      return { success: false, error: `Series folder already exists: ${seriesSlug}` };
+    } catch {
+      // Good - folder doesn't exist yet
+    }
+
+    // Create series folder
+    await fs.mkdir(seriesPath, { recursive: false });
+    seriesCreated = true;
+
+    // Create series metadata
+    const metadata: SeriesMetadata = {
+      name: seriesName,
+      slug: seriesSlug,
+      description: description?.replace(/<[^>]*>/g, '').trim() || '',
+      created: getCurrentDate(),
+      template: template || 'default',
+      settings: {
+        default_distribution_profile: 'full',
+        default_format: '4K'
+      }
+    };
+
+    // Write series.yml
+    const metadataContent = '# Series Metadata\n' + yaml.dump(metadata, {
+      lineWidth: -1,
+      quotingType: '"',
+      forceQuotes: false
+    });
+    await fs.writeFile(path.join(seriesPath, 'series.yml'), metadataContent, 'utf8');
+
+    // Create README.md
+    const readmeContent = `# ${seriesName}
+
+${metadata.description || '*No description provided.*'}
+
+## About This Series
+
+- **Created**: ${metadata.created}
+- **Template**: ${metadata.template}
+
+## Episodes
+
+Episodes will appear here as they are created.
+
+## Notes
+
+Add any series-specific notes, style guides, or recurring elements here.
+`;
+    await fs.writeFile(path.join(seriesPath, 'README.md'), readmeContent, 'utf8');
+
+    // Return created series info
+    return {
+      success: true,
+      series: {
+        name: seriesName,
+        slug: seriesSlug,
+        path: path.relative(BASE_DIR, seriesPath),
+        metadata
+      }
+    };
+
+  } catch (error) {
+    // Cleanup on failure
+    if (seriesCreated && seriesPath) {
+      try {
+        await fs.rm(seriesPath, { recursive: true, force: true });
+      } catch {
+        // Ignore cleanup errors
+      }
+    }
+    return {
+      success: false,
+      error: `Failed to create series: ${error instanceof Error ? error.message : String(error)}`
+    };
+  }
+}
+
+/**
+ * List all series
+ */
+export async function listSeries(): Promise<{ success: boolean; series?: SeriesInfo[]; count?: number; error?: string }> {
+  try {
+    const entries = await fs.readdir(SERIES_DIR, { withFileTypes: true });
+    const seriesList: SeriesInfo[] = [];
+
+    for (const entry of entries) {
+      if (entry.isDirectory()) {
+        const seriesPath = path.join(SERIES_DIR, entry.name);
+        const metadataPath = path.join(seriesPath, 'series.yml');
+
+        try {
+          const metadata = await readYamlFile<SeriesMetadata>(metadataPath);
+          seriesList.push({
+            name: metadata.name || entry.name,
+            slug: entry.name,
+            path: path.relative(BASE_DIR, seriesPath),
+            metadata
+          });
+        } catch {
+          // No series.yml - still include it with basic info
+          seriesList.push({
+            name: entry.name,
+            slug: entry.name,
+            path: path.relative(BASE_DIR, seriesPath),
+            metadata: {
+              name: entry.name,
+              slug: entry.name,
+              description: '',
+              created: ''
+            }
+          });
+        }
+      }
+    }
+
+    return {
+      success: true,
+      series: seriesList,
+      count: seriesList.length
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: `Failed to list series: ${error instanceof Error ? error.message : String(error)}`
+    };
+  }
+}

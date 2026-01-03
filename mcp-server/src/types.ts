@@ -143,3 +143,18 @@ export interface SeriesInfo {
   path: string;
   metadata: SeriesMetadata;
 }
+
+/**
+ * Available series template types
+ */
+export type SeriesTemplate = 'default' | 'tutorial' | 'vlog' | 'podcast';
+
+/**
+ * Valid series template values
+ */
+export const VALID_SERIES_TEMPLATES: SeriesTemplate[] = [
+  'default',
+  'tutorial',
+  'vlog',
+  'podcast'
+];

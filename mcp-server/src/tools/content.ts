@@ -20,7 +20,20 @@ import {
   MAX_DESCRIPTION_LENGTH,
   MAX_SERIES_NAME_LENGTH
 } from '../utils.js';
-import type { Episode, EpisodeMetadata, WorkflowStage, VALID_WORKFLOW_STAGES, VALID_CONTENT_STATUSES, SeriesMetadata, SeriesInfo } from '../types.js';
+import type { Episode, EpisodeMetadata, WorkflowStage, VALID_WORKFLOW_STAGES, VALID_CONTENT_STATUSES, SeriesMetadata, SeriesInfo, SeriesTemplate } from '../types.js';
+import { VALID_SERIES_TEMPLATES } from '../types.js';
+
+/**
+ * Debug logger for content operations.
+ * Logs to stderr to avoid interfering with MCP stdio communication.
+ */
+function debugLog(operation: string, message: string, data?: Record<string, unknown>): void {
+  if (process.env.DEBUG === 'true' || process.env.MCP_DEBUG === 'true') {
+    const timestamp = new Date().toISOString();
+    const logData = data ? ` ${JSON.stringify(data)}` : '';
+    console.error(`[${timestamp}] [content:${operation}] ${message}${logData}`);
+  }
+}
 
 /**
  * Create a new episode folder and metadata
@@ -390,54 +403,97 @@ Additional planning notes and ideas for future episodes.
 }
 
 /**
- * Create a new series folder with metadata
+ * Creates a new series folder with metadata and README.
+ *
+ * Creates the following structure:
+ * - series/<slug>/series.yml - Series metadata
+ * - series/<slug>/README.md - Series description with template-specific content
+ *
+ * @param name - Display name for the series (e.g., "AI Tools Review")
+ * @param description - Optional series description (HTML tags will be stripped)
+ * @param template - Optional template type: 'default', 'tutorial', 'vlog', 'podcast'
+ * @returns Promise resolving to success status and series info, or error details
+ *
+ * @example
+ * ```typescript
+ * const result = await createSeries('My Tutorial Series', 'Learn coding', 'tutorial');
+ * if (result.success) {
+ *   console.log(`Created: ${result.series.path}`);
+ * }
+ * ```
  */
 export async function createSeries(
   name: string,
   description?: string,
-  template?: string
+  template?: SeriesTemplate | string
 ): Promise<{ success: boolean; series?: SeriesInfo; error?: string }> {
   let seriesPath: string | null = null;
   let seriesCreated = false;
+
+  debugLog('createSeries', 'Starting series creation', { name, template });
 
   try {
     // Validate series name
     const seriesName = name.trim();
     if (!seriesName) {
+      debugLog('createSeries', 'Validation failed: empty name');
       return { success: false, error: 'Series name is required' };
     }
 
     if (seriesName.length > MAX_SERIES_NAME_LENGTH) {
-      return { success: false, error: `Series name exceeds maximum length of ${MAX_SERIES_NAME_LENGTH} characters` };
+      debugLog('createSeries', 'Validation failed: name too long', { length: seriesName.length, max: MAX_SERIES_NAME_LENGTH });
+      return {
+        success: false,
+        error: `Series name "${seriesName.substring(0, 20)}..." exceeds maximum length of ${MAX_SERIES_NAME_LENGTH} characters (got ${seriesName.length})`
+      };
     }
 
     if (!isValidSeriesName(seriesName)) {
+      debugLog('createSeries', 'Validation failed: invalid characters', { name: seriesName });
       return {
         success: false,
-        error: 'Invalid series name. Use only letters, numbers, spaces, hyphens, and underscores.'
+        error: `Invalid series name "${seriesName}". Use only letters, numbers, spaces, hyphens, and underscores.`
       };
     }
 
     // Create slug from name for folder
     const seriesSlug = slugify(seriesName);
     if (!seriesSlug) {
-      return { success: false, error: 'Could not create valid folder name from series name' };
+      debugLog('createSeries', 'Validation failed: empty slug', { name: seriesName });
+      return {
+        success: false,
+        error: `Could not create valid folder name from series name "${seriesName}". Try using alphanumeric characters.`
+      };
+    }
+
+    // Validate template if provided
+    const templateType: SeriesTemplate = (template && VALID_SERIES_TEMPLATES.includes(template as SeriesTemplate))
+      ? (template as SeriesTemplate)
+      : 'default';
+
+    if (template && !VALID_SERIES_TEMPLATES.includes(template as SeriesTemplate)) {
+      debugLog('createSeries', 'Invalid template, using default', { provided: template, valid: VALID_SERIES_TEMPLATES });
     }
 
     // Build path
     seriesPath = path.join(SERIES_DIR, seriesSlug);
 
-    // Verify path is within series directory
+    // Verify path is within series directory (security check)
     const resolvedPath = path.resolve(seriesPath);
     const resolvedSeriesDir = path.resolve(SERIES_DIR) + path.sep;
     if (!resolvedPath.startsWith(resolvedSeriesDir)) {
-      return { success: false, error: 'Invalid path detected' };
+      debugLog('createSeries', 'Security: path traversal attempt blocked', { seriesSlug });
+      return { success: false, error: 'Invalid path detected - possible path traversal attempt' };
     }
 
     // Check if series already exists
     try {
       await fs.access(seriesPath);
-      return { success: false, error: `Series folder already exists: ${seriesSlug}` };
+      debugLog('createSeries', 'Series already exists', { slug: seriesSlug });
+      return {
+        success: false,
+        error: `Series "${seriesName}" already exists at ${seriesSlug}/. Choose a different name or delete the existing series first.`
+      };
     } catch {
       // Good - folder doesn't exist yet
     }
@@ -445,15 +501,17 @@ export async function createSeries(
     // Validate and sanitize description BEFORE creating folder
     const sanitizedDescription = description?.replace(/<[^>]*>/g, '').trim() || '';
     if (sanitizedDescription.length > MAX_DESCRIPTION_LENGTH) {
-      return { success: false, error: `Description exceeds maximum length of ${MAX_DESCRIPTION_LENGTH} characters` };
+      debugLog('createSeries', 'Validation failed: description too long', { length: sanitizedDescription.length, max: MAX_DESCRIPTION_LENGTH });
+      return {
+        success: false,
+        error: `Description exceeds maximum length of ${MAX_DESCRIPTION_LENGTH} characters (got ${sanitizedDescription.length})`
+      };
     }
 
     // Create series folder
+    debugLog('createSeries', 'Creating series folder', { path: seriesPath });
     await fs.mkdir(seriesPath, { recursive: false });
     seriesCreated = true;
-
-    // Determine template type (for future template-specific behavior)
-    const templateType = template || 'default';
 
     // Create series metadata
     const metadata: SeriesMetadata = {
@@ -482,6 +540,8 @@ export async function createSeries(
     const readmeContent = generateSeriesReadme(seriesName, metadata, templateType);
     await fs.writeFile(path.join(seriesPath, 'README.md'), readmeContent, 'utf8');
 
+    debugLog('createSeries', 'Series created successfully', { slug: seriesSlug, template: templateType });
+
     // Return created series info
     return {
       success: true,
@@ -494,12 +554,16 @@ export async function createSeries(
     };
 
   } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    debugLog('createSeries', 'Error during creation', { error: errorMessage, seriesCreated });
+
     // Cleanup on failure
     if (seriesCreated && seriesPath) {
       try {
+        debugLog('createSeries', 'Cleaning up failed series folder', { path: seriesPath });
         await fs.rm(seriesPath, { recursive: true, force: true });
-      } catch {
-        // Ignore cleanup errors
+      } catch (cleanupError) {
+        debugLog('createSeries', 'Cleanup failed', { error: String(cleanupError) });
       }
     }
     return {
@@ -510,12 +574,29 @@ export async function createSeries(
 }
 
 /**
- * List all series
+ * Lists all available series with their metadata.
+ *
+ * Scans the series directory and returns information about each series,
+ * including those without a series.yml file (with basic info).
+ *
+ * @returns Promise resolving to list of series with count, or error details
+ *
+ * @example
+ * ```typescript
+ * const result = await listSeries();
+ * if (result.success) {
+ *   console.log(`Found ${result.count} series`);
+ *   result.series.forEach(s => console.log(`- ${s.name}`));
+ * }
+ * ```
  */
 export async function listSeries(): Promise<{ success: boolean; series?: SeriesInfo[]; count?: number; error?: string }> {
+  debugLog('listSeries', 'Starting series listing');
+
   try {
     const entries = await fs.readdir(SERIES_DIR, { withFileTypes: true });
     const seriesList: SeriesInfo[] = [];
+    let orphanCount = 0;
 
     for (const entry of entries) {
       if (entry.isDirectory()) {
@@ -532,6 +613,7 @@ export async function listSeries(): Promise<{ success: boolean; series?: SeriesI
           });
         } catch {
           // No series.yml - still include it with basic info
+          orphanCount++;
           seriesList.push({
             name: entry.name,
             slug: entry.name,
@@ -547,15 +629,20 @@ export async function listSeries(): Promise<{ success: boolean; series?: SeriesI
       }
     }
 
+    debugLog('listSeries', 'Series listing complete', { total: seriesList.length, orphan: orphanCount });
+
     return {
       success: true,
       series: seriesList,
       count: seriesList.length
     };
   } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    debugLog('listSeries', 'Error listing series', { error: errorMessage });
+
     return {
       success: false,
-      error: `Failed to list series: ${error instanceof Error ? error.message : String(error)}`
+      error: `Failed to list series: ${errorMessage}. Ensure the series directory exists at ${SERIES_DIR}`
     };
   }
 }

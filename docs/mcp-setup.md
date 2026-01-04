@@ -155,7 +155,7 @@ You: Schedule the getting-started episode for next Monday
 Claude: I'll schedule that release...
 [Uses schedule_release tool]
 
-Scheduled: series/merview/2025-01-01-getting-started
+Scheduled: series/tutorials/2025-01-01-getting-started
 Release date: 2025-01-06
 ```
 

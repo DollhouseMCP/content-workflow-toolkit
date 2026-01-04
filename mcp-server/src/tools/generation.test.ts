@@ -380,7 +380,7 @@ describe('generateSocialPosts', () => {
     expect(result.warning).toBeUndefined();
   });
 
-  it('should reject invalid platforms', async () => {
+  it('should return error when all platforms are invalid', async () => {
     await createTestEpisode('test-series', 'platforms-test', {
       script: '# Video\n\n## Content\nSome stuff',
       metadata: { title: 'Video', content_status: 'draft' }

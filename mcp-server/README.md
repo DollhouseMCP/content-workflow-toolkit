@@ -85,8 +85,8 @@ Once configured, try these prompts with your AI assistant:
 
 ### Content Management
 - "List all episodes in draft status"
-- "Create a new episode about 'Getting Started' in the merview series"
-- "Show me the details for the latest merview episode"
+- "Create a new episode about 'Getting Started' in the tutorials series"
+- "Show me the details for the latest tutorials episode"
 - "What series do we have?"
 
 ### Workflow Tracking
@@ -139,10 +139,10 @@ Creates a new episode folder with metadata, script, and notes files.
 **Example:**
 ```json
 {
-  "series": "merview",
+  "series": "tutorials",
   "topic": "Getting Started",
-  "title": "Getting Started with Merview",
-  "description": "Learn how to set up and use Merview"
+  "title": "Getting Started with the Toolkit",
+  "description": "Learn how to set up and use the Content Workflow Toolkit"
 }
 ```
 
@@ -181,7 +181,7 @@ Updates fields in an episode's metadata.yml file.
 **Example:**
 ```json
 {
-  "series": "merview",
+  "series": "tutorials",
   "episode": "2025-01-01-getting-started",
   "updates": {
     "content_status": "ready",

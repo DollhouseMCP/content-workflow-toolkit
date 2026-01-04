@@ -387,7 +387,7 @@ const tools: Tool[] = [
   },
   {
     name: 'generate_social_posts',
-    description: 'Generates social media posts for an episode. Creates platform-appropriate content for Twitter, LinkedIn, Bluesky, and Threads.',
+    description: 'Generates social media posts for an episode. Creates platform-appropriate content for LinkedIn, Bluesky, and Threads.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -402,7 +402,7 @@ const tools: Tool[] = [
         platforms: {
           type: 'array',
           items: { type: 'string' },
-          description: 'Optional array of platforms to generate for (twitter, linkedin, bluesky, threads). Defaults to all.'
+          description: 'Optional array of platforms to generate for (linkedin, bluesky, threads). Defaults to all.'
         }
       },
       required: ['series', 'episode']

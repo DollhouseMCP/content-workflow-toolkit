@@ -252,7 +252,6 @@ describe('generateSocialPosts', () => {
 
     expect(result.success).toBe(true);
     expect(result.source).toBe('template-based');
-    expect(result.posts?.twitter).toBeDefined();
     expect(result.posts?.linkedin).toBeDefined();
     expect(result.posts?.bluesky).toBeDefined();
     expect(result.posts?.threads).toBeDefined();
@@ -265,12 +264,11 @@ describe('generateSocialPosts', () => {
     });
 
     const { generateSocialPosts } = await importGenerationModule();
-    const result = await generateSocialPosts('test-series', 'filtered', ['twitter', 'bluesky']);
+    const result = await generateSocialPosts('test-series', 'filtered', ['linkedin', 'bluesky']);
 
     expect(result.success).toBe(true);
-    expect(result.posts?.twitter).toBeDefined();
+    expect(result.posts?.linkedin).toBeDefined();
     expect(result.posts?.bluesky).toBeDefined();
-    expect(result.posts?.linkedin).toBeUndefined();
     expect(result.posts?.threads).toBeUndefined();
   });
 
@@ -285,12 +283,12 @@ describe('generateSocialPosts', () => {
     });
 
     const { generateSocialPosts } = await importGenerationModule();
-    const result = await generateSocialPosts('test-series', 'hashtags', ['twitter']);
+    const result = await generateSocialPosts('test-series', 'hashtags', ['linkedin']);
 
     expect(result.success).toBe(true);
-    expect(result.posts?.twitter).toContain('#AI');
-    expect(result.posts?.twitter).toContain('#machinelearning');
-    expect(result.posts?.twitter).toContain('#testseries');
+    expect(result.posts?.linkedin).toContain('#AI');
+    expect(result.posts?.linkedin).toContain('#machinelearning');
+    expect(result.posts?.linkedin).toContain('#testseries');
   });
 
   it('should respect character limits', async () => {
@@ -305,7 +303,6 @@ describe('generateSocialPosts', () => {
     const result = await generateSocialPosts('test-series', 'long-content');
 
     expect(result.success).toBe(true);
-    expect(result.posts?.twitter?.length).toBeLessThanOrEqual(280);
     expect(result.posts?.bluesky?.length).toBeLessThanOrEqual(300);
     expect(result.posts?.threads?.length).toBeLessThanOrEqual(500);
   });
@@ -323,7 +320,7 @@ describe('generateSocialPosts', () => {
     const result = await generateSocialPosts('test-series', 'no-script');
 
     expect(result.success).toBe(true);
-    expect(result.posts?.twitter).toContain('Video Without Script');
+    expect(result.posts?.linkedin).toContain('Video Without Script');
   });
 
   it('should return error when metadata is missing', async () => {
@@ -383,7 +380,7 @@ describe('generateSocialPosts', () => {
     expect(result.warning).toBeUndefined();
   });
 
-  it('should reject invalid platforms', async () => {
+  it('should return error when all platforms are invalid', async () => {
     await createTestEpisode('test-series', 'platforms-test', {
       script: '# Video\n\n## Content\nSome stuff',
       metadata: { title: 'Video', content_status: 'draft' }
@@ -394,7 +391,7 @@ describe('generateSocialPosts', () => {
 
     expect(result.success).toBe(false);
     expect(result.error).toContain('Invalid platforms');
-    expect(result.error).toContain('twitter');
+    expect(result.error).toContain('linkedin');
   });
 
   it('should filter out invalid platforms but succeed with valid ones', async () => {
@@ -404,11 +401,11 @@ describe('generateSocialPosts', () => {
     });
 
     const { generateSocialPosts } = await importGenerationModule();
-    const result = await generateSocialPosts('test-series', 'mixed-platforms', ['twitter', 'invalid', 'bluesky']);
+    const result = await generateSocialPosts('test-series', 'mixed-platforms', ['linkedin', 'invalid', 'bluesky']);
 
     expect(result.success).toBe(true);
-    expect(result.posts?.twitter).toBeDefined();
+    expect(result.posts?.linkedin).toBeDefined();
     expect(result.posts?.bluesky).toBeDefined();
-    expect(result.posts?.linkedin).toBeUndefined();
+    expect(result.posts?.threads).toBeUndefined();
   });
 });

@@ -9,7 +9,7 @@ import type { EpisodeMetadata } from '../types.js';
 /**
  * Valid social media platforms for post generation
  */
-const VALID_PLATFORMS = ['twitter', 'linkedin', 'bluesky', 'threads'] as const;
+const VALID_PLATFORMS = ['linkedin', 'bluesky', 'threads'] as const;
 type SocialPlatform = typeof VALID_PLATFORMS[number];
 
 /**
@@ -217,7 +217,6 @@ export async function generateSocialPosts(
 ): Promise<{
   success: boolean;
   posts?: {
-    twitter?: string;
     linkedin?: string;
     bluesky?: string;
     threads?: string;
@@ -307,25 +306,10 @@ export async function generateSocialPosts(
     debugLog('generateSocialPosts', 'Generating posts', { platforms: targetPlatforms, title: episodeTitle });
 
     const posts: {
-      twitter?: string;
       linkedin?: string;
       bluesky?: string;
       threads?: string;
     } = {};
-
-    // Twitter/X (280 chars)
-    if (targetPlatforms.includes('twitter')) {
-      const twitterPost = [
-        `🎬 New video: ${episodeTitle}`,
-        '',
-        keyPoints[0] ? `💡 ${keyPoints[0].substring(0, 100)}...` : '',
-        '',
-        `Watch now! 👇`,
-        hashtagStr
-      ].filter(Boolean).join('\n').substring(0, 280);
-
-      posts.twitter = twitterPost;
-    }
 
     // LinkedIn (longer, professional)
     if (targetPlatforms.includes('linkedin')) {
